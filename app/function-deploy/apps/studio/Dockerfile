@@ -17,9 +17,32 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update -qq && \
   apt-get install -y --no-install-recommends \
   git \
-  python3 \ 
+  python3 \
   ca-certificates \
-  build-essential && \ 
+  build-essential && \
+  rm -rf /var/lib/apt/lists/* && \
+  update-ca-certificates
+
+RUN npm install -g pnpm@10.16.1
+
+WORKDIR /app
+
+# Dependency-install and compile stages run on BUILDPLATFORM (the build
+# host's native arch) instead of inheriting the outer --platform target.
+# Next.js's native Rust compiler (SWC/Turbopack) reliably segfaults under
+# QEMU when cross-building linux/amd64 on Apple Silicon; running it natively
+# avoids emulation entirely. Only `production` below stays pinned to the
+# deploy target platform.
+FROM --platform=$BUILDPLATFORM node:22-slim AS native-base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN apt-get update -qq && \
+  apt-get install -y --no-install-recommends \
+  git \
+  python3 \
+  ca-certificates \
+  build-essential && \
   rm -rf /var/lib/apt/lists/* && \
   update-ca-certificates
 
@@ -28,13 +51,13 @@ RUN npm install -g pnpm@10.16.1
 WORKDIR /app
 
 # Prune unneeded dependencies with turbo (from apps/ for example)
-FROM base AS turbo
+FROM native-base AS turbo
 COPY . .
 
 RUN pnpm dlx turbo@2.3.3 prune studio --docker
 
 # Install dev dependencies (only if needed)
-FROM base AS deps
+FROM native-base AS deps
 COPY --from=turbo /app/out/json ./
 COPY --from=turbo /app/out/pnpm-lock.yaml ./
 
@@ -72,12 +95,29 @@ ENV NEXT_PRIVATE_STANDALONE=true
 # Disable Turbopack to use webpack which supports externals configuration for AWS SDK
 RUN TURBOPACK=0 pnpm --filter studio exec next build
 
+# `sharp` is an optional runtime dependency of `next` (see pnpm-lock.yaml)
+# used for production image optimization -- unlike the build-only SWC/
+# Turbopack binaries, it must match the *deploy target* platform. The
+# `builder` stage above ran on BUILDPLATFORM, so its bundled sharp binary
+# (under .next/standalone/node_modules) won't match a cross-built image.
+# Fetch a target-platform sharp here (bare FROM = inherits the deploy
+# target, e.g. linux/amd64) to swap in below.
+FROM node:22-slim AS sharp-target
+WORKDIR /sharp
+RUN npm install --no-save sharp@0.34.5
+
 # Copy only compiled code and dependencies
 FROM base AS production
 COPY certs/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
 COPY --from=builder /app/apps/studio/public ./apps/studio/public
 COPY --from=builder /app/apps/studio/.next/standalone ./
 COPY --from=builder /app/apps/studio/.next/static ./apps/studio/.next/static
+RUN rm -rf node_modules/sharp node_modules/@img
+# Merge in sharp's full dependency closure (sharp, @img, and sharp's own
+# small JS deps like detect-libc/semver/@emnapi) -- sharp-target is an
+# isolated install with nothing else in it, so copying its whole
+# node_modules is safe and avoids missing a hoisted sibling dependency.
+COPY --from=sharp-target /sharp/node_modules/ ./node_modules/
 EXPOSE 3000
 ENTRYPOINT ["docker-entrypoint.sh"]
 HEALTHCHECK --interval=5s --timeout=5s --retries=3 CMD node -e "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
