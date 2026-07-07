@@ -141,7 +141,10 @@ cd app/tenant-manager && npm install && cd ../..
 cd app/postgres-meta && npm install && cd ../..
 cd app/storage && npm install --ignore-scripts && cd ../..
 cd app/supabase && pnpm install --lockfile-only && cd ../..
-cd app/function-deploy && pnpm install --lockfile-only && cd ../..
+# app/function-deploy/pnpm-lock.yaml is a deliberate .gitignore exception --
+# it's committed and already present. Do NOT regenerate it here: `pnpm install
+# --frozen-lockfile` (in its Dockerfile) requires it to match exactly, and
+# running `pnpm install` against it can silently re-resolve/drop dependencies.
 
 # Download RDS CA certificate (required for SSL verification)
 mkdir -p certs
