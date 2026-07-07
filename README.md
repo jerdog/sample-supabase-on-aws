@@ -102,18 +102,45 @@ Key fields to update:
 | `infraStack.certificate.arn` | ACM certificate ARN from step 1 |
 | `domain.baseDomain` | Your base domain |
 
-### 3. Bootstrap CDK (first time only)
+### 3. Set environment
+
+The remaining steps interpolate `${AWS_ACCOUNT_ID}`, `${AWS_REGION}`, and
+`${BASE_DOMAIN}` — export them from `config.json` so nothing resolves empty
+(an empty `${AWS_ACCOUNT_ID}/${AWS_REGION}` makes `cdk bootstrap` fail with
+`UnresolvedAccount`):
+
+```bash
+export AWS_ACCOUNT_ID=$(jq -r .project.accountId config.json)
+export AWS_REGION=$(jq -r .project.region config.json)
+export BASE_DOMAIN=$(jq -r .domain.baseDomain config.json)
+```
+
+> **Behind a corporate TLS-inspection proxy?** If `aws` commands fail with
+> `SSL validation failed ... self-signed certificate in certificate chain`,
+> point both the AWS CLI and Node/CDK at your corporate CA bundle:
+>
+> ```bash
+> aws configure set ca_bundle /path/to/corporate-ca-bundle.pem   # AWS CLI (Python)
+> export NODE_EXTRA_CA_CERTS=/path/to/corporate-ca-bundle.pem     # Node / CDK
+> ```
+
+### 4. Bootstrap CDK (first time only)
 
 ```bash
 cd infra && npm install
 npx cdk bootstrap aws://${AWS_ACCOUNT_ID}/${AWS_REGION}
 ```
 
-### 4. Build & push Docker images
+### 5. Build & push Docker images
 
 ```bash
-# Generate lockfiles if missing
+# Generate lockfiles if missing (package-lock.json is gitignored by design;
+# each service's Docker build does `npm ci` / `pnpm install --frozen-lockfile`
+# and needs one present on disk first)
 cd app/tenant-manager && npm install && cd ../..
+cd app/postgres-meta && npm install && cd ../..
+cd app/storage && npm install --ignore-scripts && cd ../..
+cd app/supabase && pnpm install --lockfile-only && cd ../..
 cd app/function-deploy && pnpm install --lockfile-only && cd ../..
 
 # Download RDS CA certificate (required for SSL verification)
@@ -124,7 +151,7 @@ curl -o certs/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/
 ./build-and-push.sh
 ```
 
-### 5. Deploy infrastructure
+### 6. Deploy infrastructure
 
 ```bash
 cd infra && npm run build && npx cdk deploy SupabaseStack --require-approval never
@@ -152,13 +179,13 @@ aws ecr set-repository-policy \
   }'
 ```
 
-### 6. Configure DNS
+### 7. Configure DNS
 
 Add a wildcard CNAME record pointing `*.${BASE_DOMAIN}` to the Kong ALB DNS name (from CDK outputs).
 
 > **Cloudflare users**: disable proxy (DNS only / grey cloud) -- otherwise ACM SNI matching will fail.
 
-### 7. Create first project
+### 8. Create first project
 
 Use the existing CDK-deployed Worker Aurora cluster:
 
@@ -166,7 +193,7 @@ Use the existing CDK-deployed Worker Aurora cluster:
 ./scripts/provision-worker-and-create-project.sh
 ```
 
-### 8. Add more clusters and projects
+### 9. Add more clusters and projects
 
 `create-rds-and-project.sh` creates a **new Aurora Serverless v2 cluster**, registers it with the platform, and creates a project on it -- all in one command. Every parameter is auto-detected from CloudFormation outputs, `config.json`, and Secrets Manager.
 
@@ -217,7 +244,7 @@ MAX_ACU=8 \
 
 This creates a cluster `supabase-worker-prod-a` with 1-8 ACU capacity, registers it as `worker-prod-a`, and creates a project named `my-saas-app` on it.
 
-### 9. Run tests
+### 10. Run tests
 
 ```bash
 cd tests && pip install -r requirements.txt && ./RUN_TESTS.sh all
@@ -324,10 +351,11 @@ cd tests && ./RUN_TESTS.sh all         # All suites
 | Issue | Symptom | Solution |
 |-------|---------|----------|
 | Missing package-lock.json | tenant-manager build fails: `not found` | Run `npm install` in `app/tenant-manager/` |
-| ECR Lambda permission | `Lambda does not have permission to access the ECR image` | Run `aws ecr set-repository-policy` (see step 5) |
+| ECR Lambda permission | `Lambda does not have permission to access the ECR image` | Run `aws ecr set-repository-policy` (see step 6) |
 | Kong 401 | Unauthorized on REST API calls | Use opaque keys (`sb_publishable_*`), not JWT. Set both `apikey` and `Authorization` headers |
 | DNS NXDOMAIN | Domain not resolving | Check CNAME target, disable Cloudflare proxy, wait for propagation |
-| Go build timeout | auth-service Docker build hangs | Add `ENV GOPROXY=https://goproxy.cn,direct` to Dockerfile |
+| Go build timeout / TLS handshake failure | auth-service Docker build hangs, or `tls: handshake failure` fetching modules | `app/supabase-auth/Dockerfile` pins `GOPROXY`. Corporate networks sometimes block/intercept one of `proxy.golang.org` (official) or `goproxy.cn` (China-region mirror) but not the other -- switch `ENV GOPROXY=...` in the Dockerfile to whichever proxy your network actually allows |
+| AWS CLI SSL error | `SSL validation failed ... self-signed certificate in certificate chain` | Behind a TLS-inspection proxy: `aws configure set ca_bundle <path>` and `export NODE_EXTRA_CA_CERTS=<path>` (see step 3) |
 
 ## Security
 
