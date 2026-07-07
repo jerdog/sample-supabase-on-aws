@@ -318,6 +318,76 @@ cd tests && ./RUN_TESTS.sh isolation   # Tenant isolation tests
 cd tests && ./RUN_TESTS.sh all         # All suites
 ```
 
+## Tearing Down / Starting Over
+
+What to tear down depends on how far you got. Check what's actually deployed first:
+
+```bash
+aws cloudformation list-stacks --region ${AWS_REGION} \
+  --query 'StackSummaries[?StackStatus!=`DELETE_COMPLETE`].[StackName,StackStatus]' --output table
+```
+
+### If `SupabaseStack` failed and rolled back (most common)
+
+CloudFormation deletes a stack automatically by default when `CREATE_FAILED` rolls back, so if the
+list above shows only `CDKToolkit`, there's nothing to tear down -- fix whatever caused the failure
+and just re-run:
+
+```bash
+cd infra && npm run build && npx cdk deploy SupabaseStack --require-approval never
+```
+
+### If `SupabaseStack` is actually running and you want it gone
+
+```bash
+cd infra && npx cdk destroy SupabaseStack
+```
+
+CDK only tracks resources it created. Any **extra** Aurora clusters added via
+`./scripts/create-rds-and-project.sh` (step 9) are not part of the stack and won't be touched --
+delete those separately if you created any:
+
+```bash
+aws rds describe-db-clusters --region ${AWS_REGION} --query 'DBClusters[*].DBClusterIdentifier' --output table
+aws rds delete-db-cluster --db-cluster-identifier <cluster-id> --skip-final-snapshot --region ${AWS_REGION}
+```
+
+### Full clean slate (rebuild and redeploy everything from zero)
+
+Deletes your built images and the CDK bootstrap, so the next `build-and-push.sh` / `cdk bootstrap`
+starts completely fresh. **Does not** touch the ACM certificate -- keep it unless you're changing
+domains, since re-requesting means redoing DNS validation.
+
+```bash
+# 1. Delete the service ECR repositories (irreversible -- deletes all pushed images)
+for repo in kong-configured tenant-manager postgres-meta storage functions-service \
+            studio function-deploy auth-service postgrest-lambda; do
+  aws ecr delete-repository --repository-name "$repo" --region ${AWS_REGION} --force
+done
+
+# 2. Empty the CDK staging bucket -- it has versioning enabled, so a plain empty won't
+#    remove old versions/delete-markers, which would otherwise block deletion
+BUCKET="cdk-hnb659fds-assets-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+aws s3api list-object-versions --bucket "$BUCKET" --output json \
+  | jq -r '(.Versions // [])[] , (.DeleteMarkers // [])[] | "\(.Key)\t\(.VersionId)"' \
+  | while IFS=$'\t' read -r key vid; do
+      aws s3api delete-object --bucket "$BUCKET" --key "$key" --version-id "$vid"
+    done
+
+# 3. Destroy the CDKToolkit bootstrap stack
+aws cloudformation delete-stack --stack-name CDKToolkit --region ${AWS_REGION}
+aws cloudformation wait stack-delete-complete --stack-name CDKToolkit --region ${AWS_REGION}
+
+# 4. The staging bucket has a Retain deletion policy, so it survives step 3 -- it must be
+#    deleted manually or the next bootstrap will collide with the (now-orphaned) bucket name
+aws s3api delete-bucket --bucket "$BUCKET" --region ${AWS_REGION}
+
+# 5. Re-bootstrap
+cd infra && npx cdk bootstrap aws://${AWS_ACCOUNT_ID}/${AWS_REGION}
+```
+
+Then continue from [step 5 (Build & push Docker images)](#5-build--push-docker-images).
+
 ## API Key Format
 
 | Type | Format | Kong Consumer | RLS |
