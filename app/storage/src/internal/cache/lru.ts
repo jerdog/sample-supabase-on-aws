@@ -37,7 +37,7 @@ export class LruCache<K extends {}, V extends {}>
   }
 
   getWithOutcome(key: K) {
-    const status: BaseLruCache.Status<V> = {}
+    const status: BaseLruCache.Status<K, V> = {}
     const value = this.cache.get(key, { status })
     const outcome = (status.get || (value === undefined ? 'miss' : 'hit')) as CacheLookupOutcome
 

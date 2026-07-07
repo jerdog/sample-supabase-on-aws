@@ -8,15 +8,36 @@ COPY package.json package-lock.json ./
 COPY scripts/ensure-npm-version.cjs ./scripts/ensure-npm-version.cjs
 RUN node scripts/ensure-npm-version.cjs
 
-# Dependencies stage - install and cache all dependencies
+# Dependencies stage - install and cache all dependencies (deploy target
+# platform). This is what ships in the final image via production-deps
+# below, so any native addons match the deploy target's architecture.
 FROM base AS dependencies
 RUN npm ci
 # Cache the installed node_modules for later stages
 RUN cp -R node_modules /node_modules_cache
 
-# Build stage - use cached node_modules for building the application
-FROM base AS build
-COPY --from=dependencies /node_modules_cache ./node_modules
+# Native-arch base + deps: esbuild (invoked by `npm run build`) bundles its
+# own native Go binary, which reliably corrupts memory under QEMU when
+# cross-building linux/amd64 on Apple Silicon (Go's GC hits a `fatal error:
+# lfstack.push` from garbage pointer values -- the same class of bug as
+# Next.js's native Rust compiler segfaulting under the same emulation).
+# Install and build entirely on BUILDPLATFORM (native, no emulation)
+# instead; the build output below (`dist`) is plain JS and isn't
+# architecture-specific, so it's safe to build on a different arch than
+# the final image -- it never ships this stage's node_modules.
+FROM --platform=$BUILDPLATFORM node:24-alpine3.23 AS native-base
+RUN apk add --no-cache g++ make python3 wget
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY scripts/ensure-npm-version.cjs ./scripts/ensure-npm-version.cjs
+RUN node scripts/ensure-npm-version.cjs
+
+FROM native-base AS native-dependencies
+RUN npm ci
+
+# Build stage - use natively-installed dependencies to run the build
+FROM native-base AS build
+COPY --from=native-dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
