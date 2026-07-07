@@ -101,6 +101,7 @@ Key fields to update:
 | `project.accountId` | Your AWS account ID |
 | `infraStack.certificate.arn` | ACM certificate ARN from step 1 |
 | `domain.baseDomain` | Your base domain |
+| `tags.DeploymentDate` | A real date (e.g. `2026-02-28`) -- the template ships with the placeholder `<deployment-date>`, and `cdk deploy` will fail with `Tag [DeploymentDate] contained invalid characters` if left as-is, since `<`/`>` aren't valid in AWS tag values |
 
 ### 3. Set environment
 
