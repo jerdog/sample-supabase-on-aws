@@ -1,20 +1,20 @@
-# 多租户项目创建功能实现计划
+# Multi-Tenant Project Creation Feature Implementation Plan
 
-## 概述
+## Overview
 
-在 Supabase apps 项目中实现多租户项目创建功能，采用前后端分离架构：
-- **后端**：独立的 Tenant Manager Service
-- **前端**：在 Studio 中扩展管理界面
-- **SDK**：直接调用 Admin Service API
+Implement a multi-tenant project creation feature in the Supabase apps project, using a frontend/backend-separated architecture:
+- **Backend**: A standalone Tenant Manager Service
+- **Frontend**: Extend the management UI within Studio
+- **SDK**: Call the Admin Service API directly
 
 ---
 
-## 架构设计
+## Architecture Design
 
 ```
 ┌─────────────────┐     ┌─────────────────┐
-│  Studio 前端    │     │    SDK/CLI      │
-│  (管理界面)     │     │  (程序化调用)   │
+│  Studio Frontend │     │    SDK/CLI      │
+│  (management UI) │     │ (programmatic)  │
 └────────┬────────┘     └────────┬────────┘
          │                       │
          └───────────┬───────────┘
@@ -29,117 +29,117 @@
      ┌───────────────┼───────────────┐
      ▼               ▼               ▼
 ┌─────────┐   ┌───────────┐   ┌───────────┐
-│ RDS 集群 │   │ DynamoDB  │   │ Secrets   │
+│ RDS Cluster│ │ DynamoDB  │   │ Secrets   │
 │         │   │           │   │ Manager   │
 └─────────┘   └───────────┘   └───────────┘
 ```
 
 ---
 
-## 第一部分：Tenant Manager Service（后端）
+## Part 1: Tenant Manager Service (Backend)
 
-### 1.1 项目结构
+### 1.1 Project Structure
 
 ```
 apps/tenant-manager/
 ├── src/
-│   ├── index.ts                    # 入口文件
+│   ├── index.ts                    # Entry point
 │   ├── config/
-│   │   └── index.ts               # 环境变量配置
+│   │   └── index.ts               # Environment variable configuration
 │   ├── routes/
-│   │   ├── index.ts               # 路由汇总
-│   │   ├── projects.ts            # 项目 CRUD API
-│   │   ├── health.ts              # 健康检查
-│   │   └── admin.ts               # 管理端点
+│   │   ├── index.ts               # Route aggregation
+│   │   ├── projects.ts            # Project CRUD API
+│   │   ├── health.ts              # Health check
+│   │   └── admin.ts               # Admin endpoints
 │   ├── services/
-│   │   ├── project-service.ts     # 项目服务（迁移自 Studio）
-│   │   ├── rds-balancer.ts        # RDS 负载均衡
-│   │   ├── schema-initializer.ts  # Schema 初始化
-│   │   ├── key-generator.ts       # 密钥生成
-│   │   └── verifier.ts            # 项目验证
+│   │   ├── project-service.ts     # Project service (migrated from Studio)
+│   │   ├── rds-balancer.ts        # RDS load balancing
+│   │   ├── schema-initializer.ts  # Schema initialization
+│   │   ├── key-generator.ts       # Key generation
+│   │   └── verifier.ts            # Project verification
 │   ├── aws/
 │   │   ├── secrets-manager.ts     # AWS Secrets Manager
-│   │   ├── dynamodb.ts            # DynamoDB 操作
-│   │   └── rds.ts                 # RDS 实例管理
+│   │   ├── dynamodb.ts            # DynamoDB operations
+│   │   └── rds.ts                 # RDS instance management
 │   ├── db/
-│   │   ├── postgres.ts            # PostgreSQL 连接池
-│   │   └── queries.ts             # SQL 查询
+│   │   ├── postgres.ts            # PostgreSQL connection pool
+│   │   └── queries.ts             # SQL queries
 │   ├── middleware/
-│   │   ├── auth.ts                # 认证中间件
-│   │   └── validation.ts          # 参数验证
+│   │   ├── auth.ts                # Authentication middleware
+│   │   └── validation.ts          # Parameter validation
 │   └── types/
-│       └── index.ts               # 类型定义
+│       └── index.ts               # Type definitions
 ├── package.json
 ├── tsconfig.json
 └── Dockerfile
 ```
 
-### 1.2 API 端点设计（与官方 Management API 兼容）
+### 1.2 API Endpoint Design (compatible with the official Management API)
 
-**核心项目端点**（与官方格式一致）：
+**Core project endpoints** (matching the official format):
 
-| 方法 | 端点 | 描述 |
+| Method | Endpoint | Description |
 |------|------|------|
-| POST | `/admin/v1/projects` | 创建项目 |
-| GET | `/admin/v1/projects` | 列出所有项目（分页） |
-| GET | `/admin/v1/projects/{ref}` | 获取项目详情 |
-| PATCH | `/admin/v1/projects/{ref}` | 更新项目 |
-| DELETE | `/admin/v1/projects/{ref}` | 删除项目 |
-| POST | `/admin/v1/projects/{ref}/pause` | 暂停项目 |
-| POST | `/admin/v1/projects/{ref}/restore` | 恢复项目 |
-| GET | `/admin/v1/projects/{ref}/health` | 健康检查 |
+| POST | `/admin/v1/projects` | Create project |
+| GET | `/admin/v1/projects` | List all projects (paginated) |
+| GET | `/admin/v1/projects/{ref}` | Get project details |
+| PATCH | `/admin/v1/projects/{ref}` | Update project |
+| DELETE | `/admin/v1/projects/{ref}` | Delete project |
+| POST | `/admin/v1/projects/{ref}/pause` | Pause project |
+| POST | `/admin/v1/projects/{ref}/restore` | Restore project |
+| GET | `/admin/v1/projects/{ref}/health` | Health check |
 
-**RDS 实例管理端点**：
+**RDS instance management endpoints**:
 
-| 方法 | 端点 | 描述 |
+| Method | Endpoint | Description |
 |------|------|------|
-| GET | `/admin/v1/rds-instances` | 列出所有 RDS 实例 |
-| POST | `/admin/v1/rds-instances` | 添加新 RDS 实例 |
-| GET | `/admin/v1/rds-instances/{id}` | 获取 RDS 实例详情 |
-| PATCH | `/admin/v1/rds-instances/{id}` | 更新 RDS 实例配置 |
-| DELETE | `/admin/v1/rds-instances/{id}` | 移除 RDS 实例 |
-| GET | `/admin/v1/rds-instances/{id}/metrics` | RDS 实例指标 |
-| GET | `/admin/v1/rds-instances/{id}/projects` | 实例上的项目列表 |
-| POST | `/admin/v1/rds-instances/{id}/drain` | 设置实例为 draining（停止分配新项目）|
+| GET | `/admin/v1/rds-instances` | List all RDS instances |
+| POST | `/admin/v1/rds-instances` | Add a new RDS instance |
+| GET | `/admin/v1/rds-instances/{id}` | Get RDS instance details |
+| PATCH | `/admin/v1/rds-instances/{id}` | Update RDS instance configuration |
+| DELETE | `/admin/v1/rds-instances/{id}` | Remove an RDS instance |
+| GET | `/admin/v1/rds-instances/{id}/metrics` | RDS instance metrics |
+| GET | `/admin/v1/rds-instances/{id}/projects` | List of projects on the instance |
+| POST | `/admin/v1/rds-instances/{id}/drain` | Set the instance to draining (stop assigning new projects) |
 
-### 1.3 请求/响应格式（与官方兼容）
+### 1.3 Request/Response Formats (compatible with the official API)
 
-**创建项目请求**：
+**Create project request**:
 ```typescript
 interface CreateProjectRequest {
-  name: string                           // 项目名称
-  organization_id?: number               // 组织 ID
-  db_pass?: string                       // 数据库密码（可选，自动生成）
-  db_region?: string                     // 区域（系统自动选择该区域负载最低的 RDS）
-  desired_instance_size?: InstanceSize   // 实例大小
-  postgres_engine?: '15' | '17'          // PG 版本
-  admin_email?: string                   // 管理员邮箱
-  plan?: 'free' | 'pro' | 'team'         // 计划类型
+  name: string                           // Project name
+  organization_id?: number               // Organization ID
+  db_pass?: string                       // Database password (optional, auto-generated)
+  db_region?: string                     // Region (the system automatically picks the least-loaded RDS in this region)
+  desired_instance_size?: InstanceSize   // Instance size
+  postgres_engine?: '15' | '17'          // PG version
+  admin_email?: string                   // Admin email
+  plan?: 'free' | 'pro' | 'team'         // Plan type
 }
-// 注意：RDS 实例由系统自动选择，不支持手动指定
+// Note: the RDS instance is automatically selected by the system; manual selection is not supported
 ```
 
-**创建项目响应**（与官方格式一致）：
+**Create project response** (matching the official format):
 ```typescript
 interface CreateProjectResponse {
   id: number
-  ref: string                            // 项目引用 ID
+  ref: string                            // Project reference ID
   name: string
   organization_id: number
   cloud_provider: string
   region: string
   status: ProjectStatus
-  endpoint: string                       // API 端点 URL
-  anon_key: string                       // 匿名密钥
-  service_key: string                    // 服务角色密钥
+  endpoint: string                       // API endpoint URL
+  anon_key: string                       // Anonymous key
+  service_key: string                    // Service role key
   inserted_at: string
-  // 多租户扩展字段
-  db_instance_id: number                 // 所在 RDS 实例
-  schema_name: string                    // Schema 名称
+  // Multi-tenant extension fields
+  db_instance_id: number                 // The RDS instance it resides on
+  schema_name: string                    // Schema name
 }
 ```
 
-**项目状态枚举**（与官方一致）：
+**Project status enum** (matching the official API):
 ```typescript
 type ProjectStatus =
   | 'ACTIVE_HEALTHY'
@@ -154,7 +154,7 @@ type ProjectStatus =
   | 'RESTARTING'
 ```
 
-**分页响应格式**（与官方一致）：
+**Pagination response format** (matching the official API):
 ```typescript
 interface ListProjectsResponse {
   pagination: {
@@ -166,24 +166,24 @@ interface ListProjectsResponse {
 }
 ```
 
-### 1.4 RDS 实例管理格式
+### 1.4 RDS Instance Management Format
 
-**添加 RDS 实例请求**：
+**Add RDS instance request**:
 ```typescript
 interface AddRdsInstanceRequest {
-  identifier: string               // 实例标识符（如 rds-prod-01）
-  name: string                     // 显示名称
-  host: string                     // 主机地址
-  port: number                     // 端口（默认 5432）
-  admin_user: string               // 管理员用户名
-  admin_password: string           // 管理员密码（将加密存储）
-  region: string                   // 区域
-  max_databases: number            // 最大数据库/Schema 数量
-  weight?: number                  // 权重（用于加权随机选择，默认 1）
+  identifier: string               // Instance identifier (e.g. rds-prod-01)
+  name: string                     // Display name
+  host: string                     // Host address
+  port: number                     // Port (default 5432)
+  admin_user: string               // Admin username
+  admin_password: string           // Admin password (stored encrypted)
+  region: string                   // Region
+  max_databases: number            // Maximum number of databases/schemas
+  weight?: number                  // Weight (used for weighted random selection, default 1)
 }
 ```
 
-**RDS 实例响应**：
+**RDS instance response**:
 ```typescript
 interface RdsInstance {
   id: number
@@ -194,11 +194,11 @@ interface RdsInstance {
   region: string
   status: 'active' | 'draining' | 'maintenance' | 'offline'
   max_databases: number
-  current_databases: number        // 当前项目数
+  current_databases: number        // Current number of projects
   weight: number
   created_at: string
   updated_at: string
-  // 指标（可选，通过 /metrics 端点获取详细信息）
+  // Metrics (optional; get details via the /metrics endpoint)
   metrics?: {
     cpu_usage: number
     connection_count: number
@@ -207,109 +207,109 @@ interface RdsInstance {
 }
 ```
 
-**设置 Draining 状态**：
+**Setting the Draining state**:
 ```typescript
 // POST /admin/v1/rds-instances/{id}/drain
-// 将实例设置为 draining 状态，系统不再分配新项目到该实例
-// 用于计划下线或维护 RDS 实例
+// Sets the instance to draining status; the system will no longer assign new projects to it
+// Used when planning to decommission or perform maintenance on an RDS instance
 interface DrainResponse {
   id: number
   status: 'draining'
-  projects_count: number           // 该实例上仍有的项目数
-  message: string                  // 提示信息
+  projects_count: number           // Number of projects still on this instance
+  message: string                  // Informational message
 }
 ```
 
-### 1.5 RDS 自动选择逻辑（全自动，用户无法手动指定）
+### 1.5 RDS Auto-Selection Logic (fully automatic; users cannot manually specify)
 
-**选择策略**：
+**Selection strategy**:
 ```typescript
 type InstanceSelectionStrategy =
-  | 'least_projects'      // 项目数最少（默认）
-  | 'least_connections'   // 连接数最少
-  | 'weighted_random'     // 加权随机
-  | 'region_affinity'     // 区域亲和（优先选择与请求区域相同的 RDS）
+  | 'least_projects'      // Fewest projects (default)
+  | 'least_connections'   // Fewest connections
+  | 'weighted_random'     // Weighted random
+  | 'region_affinity'     // Region affinity (prefer the RDS in the same region as the request)
 ```
 
-**负载评分算法**：
+**Load scoring algorithm**:
 ```javascript
 calculateScore({ schemaCount, cpuUsage, connectionCount, maxSchemas }) {
   return (
-    (schemaCount / maxSchemas) * 0.4 +        // Schema 数量 40%
-    (cpuUsage / 100) * 0.3 +                  // CPU 使用率 30%
-    (connectionCount / 500) * 0.2 +           // 连接数 20%
+    (schemaCount / maxSchemas) * 0.4 +        // Schema count: 40%
+    (cpuUsage / 100) * 0.3 +                  // CPU usage: 30%
+    (connectionCount / 500) * 0.2 +           // Connection count: 20%
     (1 - (maxSchemas - schemaCount) / maxSchemas) * 0.1
   )
 }
 ```
 
-**工作流程**：
-1. 创建项目时，系统自动查询所有 `status: 'active'` 的 RDS 实例
-2. 排除 `status: 'draining'` 或 `status: 'offline'` 的实例
-3. 如果指定了 `db_region`，优先选择该区域的 RDS
-4. 使用负载评分算法选择分数最低的实例
-5. 将项目分配到选中的 RDS
+**Workflow**:
+1. When creating a project, the system automatically queries all RDS instances with `status: 'active'`
+2. Excludes instances with `status: 'draining'` or `status: 'offline'`
+3. If `db_region` is specified, prefer RDS instances in that region
+4. Use the load scoring algorithm to select the instance with the lowest score
+5. Assign the project to the selected RDS instance
 
-### 1.6 从 Studio 迁移的核心逻辑
+### 1.6 Core Logic Migrated from Studio
 
-**源文件位置**（Studio）:
-- `lib/api/self-hosted/multi-tenant/transaction-manager.ts` → 项目创建/删除事务
-- `lib/api/self-hosted/multi-tenant/database-provisioner.ts` → 数据库创建/初始化
-- `lib/api/self-hosted/multi-tenant/crypto.ts` → 密钥生成
-- `lib/api/self-hosted/multi-tenant/services/` → 服务注册（Auth, Realtime, Supavisor）
-- `lib/api/self-hosted/multi-tenant/types.ts` → 类型定义
+**Source file locations** (Studio):
+- `lib/api/self-hosted/multi-tenant/transaction-manager.ts` → Project creation/deletion transactions
+- `lib/api/self-hosted/multi-tenant/database-provisioner.ts` → Database creation/initialization
+- `lib/api/self-hosted/multi-tenant/crypto.ts` → Key generation
+- `lib/api/self-hosted/multi-tenant/services/` → Service registration (Auth, Realtime, Supavisor)
+- `lib/api/self-hosted/multi-tenant/types.ts` → Type definitions
 
-**迁移后增强**:
-1. 添加 AWS Secrets Manager 集成
-2. 添加 DynamoDB 映射表操作
-3. 添加 RDS 负载均衡选择
-4. 添加参数验证（邮箱、配额）
-5. 增强回滚机制（包含 AWS 资源清理）
+**Enhancements after migration**:
+1. Add AWS Secrets Manager integration
+2. Add DynamoDB mapping table operations
+3. Add RDS load-balancing selection
+4. Add parameter validation (email, quota)
+5. Enhance the rollback mechanism (including AWS resource cleanup)
 
-### 1.7 项目创建流程
+### 1.7 Project Creation Flow
 
 ```
-1. 验证参数
-   - 检查 project_id 唯一性
-   - 验证 admin_email 格式
-   - 检查配额限制
+1. Validate parameters
+   - Check project_id uniqueness
+   - Validate admin_email format
+   - Check quota limits
 
-2. 选择 RDS 实例
-   - 查询所有 RDS 负载情况
-   - 使用负载均衡算法选择最佳实例
+2. Select RDS instance
+   - Query load on all RDS instances
+   - Use the load-balancing algorithm to select the best instance
 
-3. 创建 Schema
-   - 在选定 RDS 中创建 project_xxx schema
-   - 创建基础表结构
-   - 设置 RLS 策略
+3. Create schema
+   - Create the project_xxx schema on the selected RDS
+   - Create the base table structure
+   - Set up RLS policies
 
-4. 生成密钥
+4. Generate keys
    - jwt_secret, anon_key, service_role_key
-   - 数据库密码
+   - Database password
 
-5. 存储密钥
+5. Store keys
    - AWS Secrets Manager
 
-6. 更新映射
+6. Update mapping
    - DynamoDB project-rds-mapping
 
-7. 注册服务
+7. Register services
    - GoTrue (Auth)
    - Realtime
    - Supavisor
 
-8. 验证创建
-   - 测试端点可用性
+8. Verify creation
+   - Test endpoint availability
 
-9. 返回结果
+9. Return result
    - project_id, endpoint, API keys
 ```
 
-### 1.8 关键实现文件
+### 1.8 Key Implementation Files
 
-**project-service.ts** - 核心服务
+**project-service.ts** - Core service
 ```typescript
-// 主要方法
+// Main methods
 export class ProjectService {
   async createProject(input: CreateProjectInput): Promise<CreateProjectResponse>
   async deleteProject(projectId: string): Promise<void>
@@ -320,7 +320,7 @@ export class ProjectService {
 }
 ```
 
-**rds-balancer.ts** - RDS 负载均衡
+**rds-balancer.ts** - RDS load balancing
 ```typescript
 export class RDSBalancer {
   async selectBestInstance(options?: SelectionOptions): Promise<RDSInstance>
@@ -330,56 +330,56 @@ export class RDSBalancer {
 
 ---
 
-## 第二部分：Studio 前端扩展
+## Part 2: Studio Frontend Extension
 
-### 2.1 新增页面
+### 2.1 New Pages
 
-| 路径 | 描述 |
+| Path | Description |
 |------|------|
-| `/admin/projects` | 项目列表（管理员视图） |
-| `/admin/projects/new` | 创建项目 |
-| `/admin/projects/[ref]` | 项目详情 |
-| `/admin/rds-instances` | RDS 实例管理 |
+| `/admin/projects` | Project list (admin view) |
+| `/admin/projects/new` | Create project |
+| `/admin/projects/[ref]` | Project details |
+| `/admin/rds-instances` | RDS instance management |
 
-### 2.2 新增组件
+### 2.2 New Components
 
 ```
 components/interfaces/Admin/
 ├── ProjectList/
-│   ├── AdminProjectList.tsx       # 项目列表
-│   ├── AdminProjectRow.tsx        # 项目行
-│   └── ProjectStatusBadge.tsx     # 状态徽章
+│   ├── AdminProjectList.tsx       # Project list
+│   ├── AdminProjectRow.tsx        # Project row
+│   └── ProjectStatusBadge.tsx     # Status badge
 ├── ProjectCreation/
-│   ├── AdminProjectForm.tsx       # 创建表单（不含 RDS 选择，系统自动分配）
-│   └── ProjectQuotaInput.tsx      # 配额设置
+│   ├── AdminProjectForm.tsx       # Creation form (no RDS selection; the system assigns automatically)
+│   └── ProjectQuotaInput.tsx      # Quota settings
 └── RdsInstances/
-    ├── RdsInstanceList.tsx        # RDS 实例列表
-    ├── RdsInstanceMetrics.tsx     # 指标显示
-    ├── AddRdsInstanceForm.tsx     # 添加新 RDS 实例表单
-    └── RdsInstanceActions.tsx     # 实例操作（drain、删除等）
+    ├── RdsInstanceList.tsx        # RDS instance list
+    ├── RdsInstanceMetrics.tsx     # Metrics display
+    ├── AddRdsInstanceForm.tsx     # Form for adding a new RDS instance
+    └── RdsInstanceActions.tsx     # Instance actions (drain, delete, etc.)
 ```
 
-### 2.3 数据层
+### 2.3 Data Layer
 
 ```
 data/admin/
 ├── projects/
-│   ├── admin-projects-query.ts        # 项目列表查询
-│   ├── admin-project-create-mutation.ts # 创建项目
-│   └── admin-project-delete-mutation.ts # 删除项目
+│   ├── admin-projects-query.ts        # Project list query
+│   ├── admin-project-create-mutation.ts # Create project
+│   └── admin-project-delete-mutation.ts # Delete project
 ├── rds-instances/
-│   ├── rds-instances-query.ts         # RDS 实例列表查询
-│   ├── rds-instance-add-mutation.ts   # 添加 RDS 实例
-│   ├── rds-instance-update-mutation.ts # 更新 RDS 实例
-│   ├── rds-instance-delete-mutation.ts # 删除 RDS 实例
-│   ├── rds-instance-drain-mutation.ts # 设置 draining 状态
-│   └── rds-instance-metrics-query.ts  # RDS 指标查询
-└── types.ts                           # 类型定义
+│   ├── rds-instances-query.ts         # RDS instance list query
+│   ├── rds-instance-add-mutation.ts   # Add RDS instance
+│   ├── rds-instance-update-mutation.ts # Update RDS instance
+│   ├── rds-instance-delete-mutation.ts # Delete RDS instance
+│   ├── rds-instance-drain-mutation.ts # Set draining status
+│   └── rds-instance-metrics-query.ts  # RDS metrics query
+└── types.ts                           # Type definitions
 ```
 
-### 2.4 可复用的现有组件
+### 2.4 Reusable Existing Components
 
-从 `components/interfaces/ProjectCreation/` 复用：
+Reused from `components/interfaces/ProjectCreation/`:
 - `ProjectNameInput.tsx`
 - `RegionSelector.tsx`
 - `DatabasePasswordInput.tsx`
@@ -388,9 +388,9 @@ data/admin/
 
 ---
 
-## 第三部分：SDK 设计
+## Part 3: SDK Design
 
-### 3.1 SDK 结构
+### 3.1 SDK Structure
 
 ```typescript
 // @supabase/admin-sdk
@@ -401,76 +401,76 @@ const admin = new AdminClient({
   apiKey: 'your-admin-api-key'
 })
 
-// 创建项目
+// Create project
 const project = await admin.projects.create({
   name: 'my-project',
   region: 'us-east-1',
   plan: 'pro'
 })
 
-// 列出项目
+// List projects
 const projects = await admin.projects.list()
 
-// 删除项目
+// Delete project
 await admin.projects.delete('project-id')
 ```
 
 ---
 
-## 实施步骤
+## Implementation Steps
 
-### Phase 1: Tenant Manager Service 基础
+### Phase 1: Tenant Manager Service Foundation
 
-1. 初始化项目结构 (`apps/tenant-manager/`)
-2. 配置 TypeScript、ESLint、环境变量
-3. 实现 Express/Fastify 路由框架
-4. 迁移 `transaction-manager.ts` 逻辑
-5. 迁移 `database-provisioner.ts` 逻辑
-6. 迁移 `crypto.ts` 密钥生成逻辑
+1. Initialize the project structure (`apps/tenant-manager/`)
+2. Configure TypeScript, ESLint, and environment variables
+3. Implement the Express/Fastify routing framework
+4. Migrate the `transaction-manager.ts` logic
+5. Migrate the `database-provisioner.ts` logic
+6. Migrate the `crypto.ts` key generation logic
 
-### Phase 2: AWS 集成
+### Phase 2: AWS Integration
 
-1. 实现 Secrets Manager 模块
-2. 实现 DynamoDB 映射操作
-3. 实现 RDS 负载均衡器
-4. 添加 CloudWatch 指标获取
+1. Implement the Secrets Manager module
+2. Implement DynamoDB mapping operations
+3. Implement the RDS load balancer
+4. Add CloudWatch metrics retrieval
 
-### Phase 3: API 完善
+### Phase 3: API Completion
 
-1. 实现所有 CRUD 端点
-2. 添加认证中间件
-3. 添加参数验证
-4. 实现回滚机制
-5. 添加健康检查端点
+1. Implement all CRUD endpoints
+2. Add authentication middleware
+3. Add parameter validation
+4. Implement the rollback mechanism
+5. Add a health check endpoint
 
-### Phase 4: Studio 前端
+### Phase 4: Studio Frontend
 
-1. 创建 Admin 布局和导航
-2. 实现项目列表页面
-3. 实现项目创建表单
-4. 实现 RDS 实例管理页面
-5. 连接数据层到 Admin Service
+1. Create the Admin layout and navigation
+2. Implement the project list page
+3. Implement the project creation form
+4. Implement the RDS instance management page
+5. Wire the data layer to the Admin Service
 
-### Phase 5: 测试与部署
+### Phase 5: Testing and Deployment
 
-1. 单元测试
-2. 集成测试
-3. Docker 镜像构建
-4. ECS 部署配置
-5. 文档编写
+1. Unit tests
+2. Integration tests
+3. Docker image build
+4. ECS deployment configuration
+5. Documentation
 
 ---
 
-## 环境变量
+## Environment Variables
 
 ### Tenant Manager Service
 
 ```bash
-# 服务配置
+# Service configuration
 PORT=3001
 NODE_ENV=production
 
-# AWS 配置
+# AWS configuration
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=xxx
 AWS_SECRET_ACCESS_KEY=xxx
@@ -481,14 +481,14 @@ AWS_SECRETS_PREFIX=supabase/projects
 # DynamoDB
 DYNAMODB_TABLE_PROJECT_MAPPING=project-rds-mapping
 
-# 默认 RDS
+# Default RDS
 RDS_DEFAULT_INSTANCE_ID=1
 
-# 认证
+# Authentication
 ADMIN_API_KEY=xxx
 JWT_SECRET=xxx
 
-# 服务注册
+# Service registration
 GOTRUE_URL=http://gotrue:9999
 REALTIME_URL=http://realtime:4000
 SUPAVISOR_URL=http://supavisor:4000
@@ -497,16 +497,16 @@ SUPAVISOR_URL=http://supavisor:4000
 ### Studio
 
 ```bash
-# Admin Service 配置
+# Admin Service configuration
 NEXT_PUBLIC_ADMIN_SERVICE_URL=https://admin.example.com
 ADMIN_SERVICE_API_KEY=xxx
 ```
 
 ---
 
-## 关键文件路径
+## Key File Paths
 
-### 需要迁移的源文件（Studio）
+### Source Files to Migrate (Studio)
 
 - `/apps/studio/lib/api/self-hosted/multi-tenant/transaction-manager.ts`
 - `/apps/studio/lib/api/self-hosted/multi-tenant/database-provisioner.ts`
@@ -516,7 +516,7 @@ ADMIN_SERVICE_API_KEY=xxx
 - `/apps/studio/lib/api/self-hosted/multi-tenant/services/realtime.ts`
 - `/apps/studio/lib/api/self-hosted/multi-tenant/services/supavisor.ts`
 
-### 可复用的前端组件（Studio）
+### Reusable Frontend Components (Studio)
 
 - `/apps/studio/components/interfaces/ProjectCreation/ProjectNameInput.tsx`
 - `/apps/studio/components/interfaces/ProjectCreation/RegionSelector.tsx`
@@ -525,13 +525,13 @@ ADMIN_SERVICE_API_KEY=xxx
 
 ---
 
-## 验证方案
+## Verification Plan
 
-1. **单元测试**: 各服务模块的独立测试
-2. **集成测试**: 完整项目创建流程测试
-3. **端到端测试**:
-   - 通过 SDK 创建项目
-   - 验证数据库可访问
-   - 验证 API keys 有效
-   - 验证服务注册成功
-4. **回滚测试**: 模拟失败场景验证回滚完整性
+1. **Unit tests**: Independent tests for each service module
+2. **Integration tests**: Full project creation flow test
+3. **End-to-end tests**:
+   - Create a project via the SDK
+   - Verify the database is accessible
+   - Verify the API keys are valid
+   - Verify service registration succeeded
+4. **Rollback tests**: Simulate failure scenarios to verify rollback completeness

@@ -68,11 +68,11 @@ services:
 
               if project_id and uri:match("^/functions/v1/(.+)") then
                 local slug = uri:match("^/functions/v1/(.+)")
-                -- health 端点不添加 project_id
+                -- Don't add project_id for the health endpoint
                 if slug == "health" or slug == "main" then
                   kong.log.debug("Special endpoint detected, no path rewrite: ", slug)
                 end
-                -- 不需要重写路径，project_id 通过 header 传递
+                -- No need to rewrite the path; project_id is passed via header
                 kong.log.debug("Function request for project: ", project_id, " slug: ", slug)
               end
 

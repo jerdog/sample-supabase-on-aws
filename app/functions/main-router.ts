@@ -1,12 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { scryptSync, createDecipheriv } from "node:crypto"
 
-// 支持通过环境变量动态配置
+// Supports dynamic configuration via environment variables
 const WORKER_MEMORY_MB = parseInt(Deno.env.get("WORKER_MEMORY_MB") || "128")
 const WORKER_TIMEOUT_MS = parseInt(Deno.env.get("WORKER_TIMEOUT_MS") || "60000")
 const PORT = parseInt(Deno.env.get("PORT") || "8080")
 
-// Secrets 存储配置
+// Secrets storage configuration
 const SECRETS_PATH = Deno.env.get("SUPABASE_SECRETS_PATH") || "/home/deno/functions/.supabase/secrets"
 // fail-fast: the encryption key MUST be provided. A hard-coded fallback meant
 // that a misconfigured deploy would silently derive a publicly-known key and
@@ -38,12 +38,12 @@ const WORKER_ENV_ALLOWLIST = new Set(
     .filter((s) => s.length > 0),
 )
 
-// Secrets 缓存（每个项目缓存 60 秒）
+// Secrets cache (each project's secrets are cached for 60 seconds)
 const secretsCache = new Map<string, { secrets: Record<string, string>, expiry: number }>()
 const SECRETS_CACHE_TTL_MS = 60000
 
 /**
- * 使用 AES-256-GCM 解密数据（与 Studio 的加密实现兼容）
+ * Decrypts data using AES-256-GCM (compatible with Studio's encryption implementation)
  */
 function decrypt(encryptedData: string, key: string): string {
   const algorithm = 'aes-256-gcm'
@@ -54,7 +54,7 @@ function decrypt(encryptedData: string, key: string): string {
     throw new Error('Invalid encrypted data format')
   }
   
-  // 使用 Uint8Array 代替 Buffer
+  // Use Uint8Array instead of Buffer
   const iv = new Uint8Array(parts[0].match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
   const authTag = new Uint8Array(parts[1].match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
   const encrypted = parts[2]
@@ -69,7 +69,7 @@ function decrypt(encryptedData: string, key: string): string {
 }
 
 /**
- * 从文件系统加载项目的 secrets
+ * Loads a project's secrets from the file system
  */
 async function getProjectSecrets(projectRef: string): Promise<Record<string, string>> {
   const cached = secretsCache.get(projectRef)
@@ -115,7 +115,7 @@ async function getProjectSecrets(projectRef: string): Promise<Record<string, str
 /**
  * Classify a worker error into a precise HTTP status + structured body.
  *
- * Background (二期 PDF §6): the old handler collapsed three distinct failures
+ * Background (PDF Phase 2 §6): the old handler collapsed three distinct failures
  * into a single 404 {"msg":"Function not found"}:
  *   - the function directory / entrypoint genuinely does not exist
  *   - the user's code has a SYNTAX error (Edge Runtime cannot parse it)
@@ -267,7 +267,7 @@ serve(async (req) => {
   const servicePath = `${basePath}/${functionPath}`
   
   try {
-    // 获取项目的 secrets（如果有 projectRef）
+    // Get the project's secrets (if projectRef is present)
     let projectSecrets: Record<string, string> = {}
     if (projectRef) {
       projectSecrets = await getProjectSecrets(projectRef)
@@ -287,7 +287,7 @@ serve(async (req) => {
     }
     const mergedEnvVars = { ...baseEnvVars, ...projectSecrets }
     
-    // 每次创建新 worker（无缓存）
+    // Create a new worker each time (no caching)
     console.debug(`Creating ephemeral worker for: ${servicePath} (with ${Object.keys(projectSecrets).length} project secrets)`)
     const worker = await EdgeRuntime.userWorkers.create({
       servicePath,
@@ -300,7 +300,7 @@ serve(async (req) => {
     try {
       return await worker.fetch(req)
     } finally {
-      // 执行完成后立即终止 worker
+      // Terminate the worker immediately after execution completes
       try {
         await worker.terminate?.()
       } catch (e) {
@@ -310,7 +310,7 @@ serve(async (req) => {
   } catch (e) {
     const errMsg = e.toString()
     const classified = classifyWorkerError(errMsg, functionPath)
-    // boot/语法错误用 warn 级别记录原始信息，便于用户与运维排查
+    // Log the raw boot/syntax error message at warn level, to make troubleshooting easier for users and operators
     console.error(`Worker error for ${servicePath} [${classified.code}]:`, errMsg)
     return new Response(
       JSON.stringify(classified.body),

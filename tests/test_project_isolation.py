@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-验证删除项目 A 不影响项目 B 的函数调用
+Verify that deleting Project A does not affect function calls in Project B
 """
 
 import os
@@ -32,11 +32,11 @@ def get_admin_api_key():
 ADMIN_API_KEY = get_admin_api_key()
 
 print("=" * 70)
-print("验证删除项目 A 不影响项目 B")
+print("Verify that deleting Project A does not affect Project B")
 print("=" * 70)
 
-# 创建项目 A
-print("\n=== 1. 创建项目 A ===")
+# Create Project A
+print("\n=== 1. Create Project A ===")
 resp = requests.post(
     f"{STUDIO_ALB}/api/v1/projects",
     json={"name": f"test-project-a-{int(time.time())}"},
@@ -45,10 +45,10 @@ resp = requests.post(
 assert resp.status_code == 201
 project_a_ref = resp.json()['ref']
 project_a_domain = f"https://{project_a_ref}.{SUPABASE_DOMAIN}"
-print(f"✓ 项目 A: {project_a_ref}")
+print(f"✓ Project A: {project_a_ref}")
 
-# 创建项目 B
-print("\n=== 2. 创建项目 B ===")
+# Create Project B
+print("\n=== 2. Create Project B ===")
 resp = requests.post(
     f"{STUDIO_ALB}/api/v1/projects",
     json={"name": f"test-project-b-{int(time.time())}"},
@@ -57,27 +57,27 @@ resp = requests.post(
 assert resp.status_code == 201
 project_b_ref = resp.json()['ref']
 project_b_domain = f"https://{project_b_ref}.{SUPABASE_DOMAIN}"
-print(f"✓ 项目 B: {project_b_ref}")
+print(f"✓ Project B: {project_b_ref}")
 
-print("\n等待项目就绪（30秒）...")
+print("\nWaiting for projects to be ready (30s)...")
 time.sleep(30)
 
-# 获取项目 A 的 API key
-print("\n=== 3. 获取项目 A 的 API Key ===")
+# Get Project A's API key
+print("\n=== 3. Get Project A's API Key ===")
 resp = requests.get(f"{STUDIO_ALB}/api/v1/projects/{project_a_ref}/api-keys", verify=False)  # nosec B501
 assert resp.status_code == 200
 anon_key_a = next(k['api_key'] for k in resp.json() if k['name'] == 'anon')
 print(f"✓ API Key A: {anon_key_a[:30]}...")
 
-# 获取项目 B 的 API key
-print("\n=== 4. 获取项目 B 的 API Key ===")
+# Get Project B's API key
+print("\n=== 4. Get Project B's API Key ===")
 resp = requests.get(f"{STUDIO_ALB}/api/v1/projects/{project_b_ref}/api-keys", verify=False)  # nosec B501
 assert resp.status_code == 200
 anon_key_b = next(k['api_key'] for k in resp.json() if k['name'] == 'anon')
 print(f"✓ API Key B: {anon_key_b[:30]}...")
 
-# 在项目 A 部署函数
-print("\n=== 5. 在项目 A 部署函数 ===")
+# Deploy a function to Project A
+print("\n=== 5. Deploy a function to Project A ===")
 code_a = '''Deno.serve(() => {
   return new Response("Function from Project A")
 })'''
@@ -87,10 +87,10 @@ resp = requests.post(
     files=files, verify=False  # nosec B501
 )
 assert resp.status_code == 201
-print("✓ 函数 A 部署成功")
+print("✓ Function A deployed successfully")
 
-# 在项目 B 部署函数
-print("\n=== 6. 在项目 B 部署函数 ===")
+# Deploy a function to Project B
+print("\n=== 6. Deploy a function to Project B ===")
 code_b = '''Deno.serve(() => {
   return new Response("Function from Project B")
 })'''
@@ -100,13 +100,13 @@ resp = requests.post(
     files=files, verify=False  # nosec B501
 )
 assert resp.status_code == 201
-print("✓ 函数 B 部署成功")
+print("✓ Function B deployed successfully")
 
-print("\n等待函数就绪（10秒）...")
+print("\nWaiting for functions to be ready (10s)...")
 time.sleep(10)
 
-# 验证项目 A 的函数可调用
-print("\n=== 7. 验证项目 A 的函数可调用 ===")
+# Verify Project A's function is callable
+print("\n=== 7. Verify Project A's function is callable ===")
 resp = requests.get(
     f"{project_a_domain}/functions/v1/test-func-a",
     headers={"apikey": anon_key_a},
@@ -114,10 +114,10 @@ resp = requests.get(
 )
 assert resp.status_code == 200
 assert "Project A" in resp.text
-print(f"✓ 项目 A 函数调用成功: {resp.text}")
+print(f"✓ Project A function call succeeded: {resp.text}")
 
-# 验证项目 B 的函数可调用
-print("\n=== 8. 验证项目 B 的函数可调用 ===")
+# Verify Project B's function is callable
+print("\n=== 8. Verify Project B's function is callable ===")
 resp = requests.get(
     f"{project_b_domain}/functions/v1/test-func-b",
     headers={"apikey": anon_key_b},
@@ -125,62 +125,62 @@ resp = requests.get(
 )
 assert resp.status_code == 200
 assert "Project B" in resp.text
-print(f"✓ 项目 B 函数调用成功: {resp.text}")
+print(f"✓ Project B function call succeeded: {resp.text}")
 
-# 删除项目 A
-print("\n=== 9. 删除项目 A ===")
+# Delete Project A
+print("\n=== 9. Delete Project A ===")
 headers = {"Authorization": f"Bearer {ADMIN_API_KEY}"}
 resp = requests.delete(
     f"{STUDIO_ALB}/admin/v1/projects/{project_a_ref}",
     headers=headers, verify=False  # nosec B501
 )
 assert resp.status_code == 204
-print("✓ 项目 A 删除成功")
+print("✓ Project A deleted successfully")
 
-print("\n等待清理完成（10秒）...")
+print("\nWaiting for cleanup to finish (10s)...")
 time.sleep(10)
 
-# 验证项目 A 的函数不可调用
-print("\n=== 10. 验证项目 A 的函数不可调用 ===")
+# Verify Project A's function is no longer callable
+print("\n=== 10. Verify Project A's function is no longer callable ===")
 resp = requests.get(
     f"{project_a_domain}/functions/v1/test-func-a",
     headers={"apikey": anon_key_a},
     verify=False  # nosec B501
 )
 if resp.status_code in [401, 404, 500, 503]:
-    print(f"✓ 项目 A 函数不可调用（{resp.status_code}）")
+    print(f"✓ Project A function is no longer callable ({resp.status_code})")
 else:
-    print(f"⚠ 项目 A 函数仍可调用（{resp.status_code}）")
+    print(f"⚠ Project A function is still callable ({resp.status_code})")
 
-# 验证项目 B 的函数仍然可调用
-print("\n=== 11. 验证项目 B 的函数仍然可调用 ===")
+# Verify Project B's function is still callable
+print("\n=== 11. Verify Project B's function is still callable ===")
 resp = requests.get(
     f"{project_b_domain}/functions/v1/test-func-b",
     headers={"apikey": anon_key_b},
     verify=False  # nosec B501
 )
-assert resp.status_code == 200, f"项目 B 函数调用失败: {resp.status_code} - {resp.text}"
+assert resp.status_code == 200, f"Project B function call failed: {resp.status_code} - {resp.text}"
 assert "Project B" in resp.text
-print(f"✓ 项目 B 函数仍然正常: {resp.text}")
+print(f"✓ Project B is still working normally: {resp.text}")
 
-# 验证项目 B 的函数列表正常
-print("\n=== 12. 验证项目 B 的函数列表正常 ===")
+# Verify Project B's function list is normal
+print("\n=== 12. Verify Project B's function list is normal ===")
 resp = requests.get(f"{STUDIO_ALB}/api/v1/projects/{project_b_ref}/functions", verify=False)  # nosec B501
 assert resp.status_code == 200
 functions = resp.json()
 assert len(functions) == 1
 assert functions[0]['slug'] == 'test-func-b'
-print(f"✓ 项目 B 函数列表正常: {[f['slug'] for f in functions]}")
+print(f"✓ Project B function list is normal: {[f['slug'] for f in functions]}")
 
-# 清理项目 B
-print("\n=== 13. 清理项目 B ===")
+# Clean up Project B
+print("\n=== 13. Clean up Project B ===")
 resp = requests.delete(
     f"{STUDIO_ALB}/admin/v1/projects/{project_b_ref}",
     headers=headers, verify=False  # nosec B501
 )
 assert resp.status_code == 204
-print("✓ 项目 B 删除成功")
+print("✓ Project B deleted successfully")
 
 print("\n" + "=" * 70)
-print("✅ 验证完成！删除项目 A 不影响项目 B 的函数调用")
+print("✅ Verification complete! Deleting Project A did not affect Project B's function calls")
 print("=" * 70)

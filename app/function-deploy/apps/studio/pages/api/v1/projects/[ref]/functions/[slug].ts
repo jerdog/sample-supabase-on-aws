@@ -132,7 +132,7 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse, context: Pro
       })
     }
 
-    // Validate function slug format (支持多级目录)
+    // Validate function slug format (supports multi-level directories)
     if (!/^[a-z0-9][a-z0-9_\/-]*[a-z0-9]$/.test(slug)) {
       return res.status(400).json({
         data: null,

@@ -1,19 +1,19 @@
-# Functions Service 部署指南
+# Functions Service Deployment Guide
 
-## 📋 概述
+## 📋 Overview
 
-本文档说明如何构建、打包、发布 Functions Service，并更新 ECS Task。
+This document explains how to build, package, and publish the Functions Service, and how to update the ECS Task.
 
-## 🔧 前提条件
+## 🔧 Prerequisites
 
-### 1. 环境要求
+### 1. Environment Requirements
 
-- Docker 已安装并运行
-- AWS CLI 已配置（profile: `<AWS_PROFILE>`）
-- 有 ECR 仓库的推送权限
-- 有 ECS 服务的更新权限
+- Docker installed and running
+- AWS CLI configured (profile: `<AWS_PROFILE>`)
+- Push permissions to the ECR repository
+- Update permissions for the ECS service
 
-### 2. AWS 资源信息
+### 2. AWS Resource Information
 
 ```bash
 AWS Account: <AWS_ACCOUNT_ID>
@@ -24,13 +24,13 @@ ECS Cluster: <ECS_CLUSTER>
 ECS Service: functions-service
 ```
 
-### 3. 验证 AWS 配置
+### 3. Verify AWS Configuration
 
 ```bash
-# 验证 AWS 配置
+# Verify AWS configuration
 aws sts get-caller-identity --profile <AWS_PROFILE>
 
-# 预期输出
+# Expected output
 # {
 #     "UserId": "...",
 #     "Account": "<AWS_ACCOUNT_ID>",
@@ -38,32 +38,32 @@ aws sts get-caller-identity --profile <AWS_PROFILE>
 # }
 ```
 
-## 📦 部署步骤
+## 📦 Deployment Steps
 
-### 方法一：使用统一构建脚本（推荐）
+### Method 1: Use the Unified Build Script (Recommended)
 
-项目提供了统一的构建脚本，可以自动完成构建和推送。
+The project provides a unified build script that can automatically handle building and pushing.
 
-#### 1. 使用构建脚本
+#### 1. Use the Build Script
 
 ```bash
-# 进入项目根目录
+# Go to the project root directory
 cd ~/supabase-on-aws
 
-# 构建并推送 Functions Service
+# Build and push the Functions Service
 ./app/build-and-push.sh functions
 ```
 
-脚本会自动完成：
-- ECR 登录
-- Docker 镜像构建（linux/amd64 平台）
-- 推送到 ECR
-- 显示最新镜像信息
+The script will automatically:
+- Log in to ECR
+- Build the Docker image (linux/amd64 platform)
+- Push to ECR
+- Display the latest image information
 
-#### 2. 强制更新 ECS Service
+#### 2. Force Update the ECS Service
 
 ```bash
-# 方式 A：使用 AWS CLI
+# Method A: Using AWS CLI
 export AWS_PROFILE=<AWS_PROFILE>
 
 aws ecs update-service \
@@ -72,15 +72,15 @@ aws ecs update-service \
   --force-new-deployment \
   --region us-east-1
 
-# 方式 B：使用 CDK 重新部署
+# Method B: Redeploy using CDK
 cd infra
 cdk deploy SupabaseStack --require-approval never
 ```
 
-#### 3. 监控部署状态
+#### 3. Monitor Deployment Status
 
 ```bash
-# 查看服务状态
+# Check service status
 aws ecs describe-services \
   --cluster <ECS_CLUSTER> \
   --services functions-service \
@@ -89,7 +89,7 @@ aws ecs describe-services \
   --query 'services[0].[serviceName,status,runningCount,desiredCount,deployments[0].rolloutState]' \
   --output table
 
-# 预期输出（部署完成后）
+# Expected output (after deployment completes)
 # ----------------------------------------
 # |         DescribeServices            |
 # +--------------------+-------+---+---+
@@ -98,50 +98,50 @@ aws ecs describe-services \
 # +--------------------+-------+---+---+
 ```
 
-### 方法二：手动构建和推送
+### Method 2: Manual Build and Push
 
-如果需要更精细的控制，可以手动执行每个步骤。
+If you need finer-grained control, you can execute each step manually.
 
-#### 1. 登录到 ECR
+#### 1. Log in to ECR
 
 ```bash
 export AWS_PROFILE=<AWS_PROFILE>
 export AWS_REGION=us-east-1
 export AWS_ACCOUNT_ID=<AWS_ACCOUNT_ID>
 
-# 登录 ECR
+# Log in to ECR
 aws ecr get-login-password --region $AWS_REGION --profile $AWS_PROFILE | \
   docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 ```
 
-#### 2. 构建 Docker 镜像
+#### 2. Build the Docker Image
 
 ```bash
-# 进入 functions 目录
+# Go to the functions directory
 cd ~/supabase-on-aws/app/functions
 
-# 构建镜像（指定 linux/amd64 平台）
+# Build the image (specifying linux/amd64 platform)
 docker build --platform linux/amd64 -t functions-service:latest .
 
-# 验证镜像已创建
+# Verify the image was created
 docker images | grep functions-service
 ```
 
-#### 3. 标记并推送镜像
+#### 3. Tag and Push the Image
 
 ```bash
-# 标记镜像
+# Tag the image
 docker tag functions-service:latest \
   <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/functions-service:latest
 
-# 推送到 ECR
+# Push to ECR
 docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/functions-service:latest
 ```
 
-#### 4. 验证镜像已推送
+#### 4. Verify the Image Was Pushed
 
 ```bash
-# 查看 ECR 仓库中的镜像
+# View the image in the ECR repository
 aws ecr describe-images \
   --repository-name functions-service \
   --region us-east-1 \
@@ -150,10 +150,10 @@ aws ecr describe-images \
   --output table
 ```
 
-#### 5. 更新 ECS Service
+#### 5. Update the ECS Service
 
 ```bash
-# 强制更新 ECS Service（拉取最新镜像）
+# Force update the ECS Service (pull the latest image)
 aws ecs update-service \
   --cluster <ECS_CLUSTER> \
   --service functions-service \
@@ -162,19 +162,19 @@ aws ecs update-service \
   --profile <AWS_PROFILE>
 ```
 
-## 🔍 部署验证
+## 🔍 Deployment Verification
 
-### 1. 检查 Task 状态
+### 1. Check Task Status
 
 ```bash
-# 查看正在运行的任务
+# View running tasks
 aws ecs list-tasks \
   --cluster <ECS_CLUSTER> \
   --service-name functions-service \
   --region us-east-1 \
   --profile <AWS_PROFILE>
 
-# 获取 Task ARN 并查看详情
+# Get the Task ARN and view details
 TASK_ARN=$(aws ecs list-tasks \
   --cluster <ECS_CLUSTER> \
   --service-name functions-service \
@@ -192,10 +192,10 @@ aws ecs describe-tasks \
   --output table
 ```
 
-### 2. 检查容器日志
+### 2. Check Container Logs
 
 ```bash
-# 查看最近 10 分钟的日志
+# View logs from the last 10 minutes
 aws logs tail /ecs/supabase \
   --since 10m \
   --filter-pattern "functions-service" \
@@ -204,24 +204,24 @@ aws logs tail /ecs/supabase \
   --follow
 ```
 
-### 3. 测试 API 端点
+### 3. Test API Endpoints
 
 ```bash
-# 测试健康检查
+# Test health check
 curl https://api.example.com/functions/health
 
-# 预期响应
+# Expected response
 # {
 #   "status": "healthy",
 #   "service": "Functions Service",
 #   "timestamp": "2026-02-07..."
 # }
 
-# 测试 Functions 端点（带 X-Project-ID header）
+# Test the Functions endpoint (with X-Project-ID header)
 curl -H "X-Project-ID: test-project" \
   https://api.example.com/functions
 
-# 预期响应
+# Expected response
 # {
 #   "service": "Functions Service",
 #   "message": "Functions endpoint accessed successfully",
@@ -231,10 +231,10 @@ curl -H "X-Project-ID: test-project" \
 #   "timestamp": "2026-02-07..."
 # }
 
-# 测试子域名路由（推荐方式 - DNS 已配置）
+# Test subdomain routing (recommended method - DNS already configured)
 curl https://project-alpha.example.com/functions
 
-# 预期响应（project_id 自动从子域名提取）
+# Expected response (project_id automatically extracted from subdomain)
 # {
 #   "message": "Functions endpoint accessed successfully",
 #   "method": "GET",
@@ -244,14 +244,14 @@ curl https://project-alpha.example.com/functions
 #   "timestamp": "2026-02-07 05:08:14.645021"
 # }
 
-# 测试不同的 project-id
+# Test different project-ids
 curl https://my-project-123.example.com/functions
 curl https://test-app.example.com/functions
 
-# 测试子域名路由 + 子路径
+# Test subdomain routing + subpath
 curl https://project-alpha.example.com/functions/hello-world
 
-# 预期响应（包含 subpath）
+# Expected response (includes subpath)
 # {
 #   "message": "Functions endpoint accessed successfully",
 #   "method": "GET",
@@ -262,13 +262,13 @@ curl https://project-alpha.example.com/functions/hello-world
 #   "timestamp": "2026-02-07..."
 # }
 
-# 测试 POST 请求（子域名路由）
+# Test POST request (subdomain routing)
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"function": "hello", "data": "test"}' \
   https://project-beta.example.com/functions/execute
 
-# 预期响应（包含 request_data）
+# Expected response (includes request_data)
 # {
 #   "message": "Functions endpoint accessed successfully",
 #   "method": "POST",
@@ -284,16 +284,16 @@ curl -X POST \
 # }
 ```
 
-## 🐛 故障排除
+## 🐛 Troubleshooting
 
-### 问题 1：Task 无法启动
+### Issue 1: Task Fails to Start
 
-**症状**：ECS Task 一直处于 PENDING 或 STOPPED 状态
+**Symptom**: The ECS Task remains stuck in PENDING or STOPPED state
 
-**排查步骤**：
+**Troubleshooting Steps**:
 
 ```bash
-# 1. 查看 Task 失败原因
+# 1. Check the reason for Task failure
 aws ecs describe-tasks \
   --cluster <ECS_CLUSTER> \
   --tasks $TASK_ARN \
@@ -301,7 +301,7 @@ aws ecs describe-tasks \
   --profile <AWS_PROFILE> \
   --query 'tasks[0].stoppedReason'
 
-# 2. 检查容器日志
+# 2. Check container logs
 aws logs tail /ecs/supabase \
   --since 30m \
   --filter-pattern "functions-service" \
@@ -309,19 +309,19 @@ aws logs tail /ecs/supabase \
   --profile <AWS_PROFILE>
 ```
 
-**常见原因**：
-- ECR 镜像拉取失败：检查 ECR 权限和镜像是否存在
-- 健康检查失败：确认应用在容器内正常启动
-- 资源不足：检查 ECS 集群容量
+**Common Causes**:
+- ECR image pull failure: check ECR permissions and whether the image exists
+- Health check failure: confirm the application starts normally inside the container
+- Insufficient resources: check ECS cluster capacity
 
-### 问题 2：健康检查失败
+### Issue 2: Health Check Failure
 
-**症状**：Task 启动后很快被终止
+**Symptom**: The Task is terminated shortly after starting
 
-**排查步骤**：
+**Troubleshooting Steps**:
 
 ```bash
-# 查看健康检查配置
+# View health check configuration
 aws ecs describe-task-definition \
   --task-definition functions-service \
   --region us-east-1 \
@@ -329,25 +329,25 @@ aws ecs describe-task-definition \
   --query 'taskDefinition.containerDefinitions[0].healthCheck'
 ```
 
-**解决方案**：
-- 确认 `/health` 端点返回 200 状态码
-- 检查应用启动时间是否超过健康检查间隔
-- 查看容器日志确认应用正常运行
+**Solution**:
+- Confirm the `/health` endpoint returns a 200 status code
+- Check whether the application startup time exceeds the health check interval
+- Check container logs to confirm the application is running normally
 
-### 问题 3：Kong 无法路由到 Functions Service
+### Issue 3: Kong Cannot Route to the Functions Service
 
-**症状**：API 请求返回 503 或超时
+**Symptom**: API requests return 503 or time out
 
-**排查步骤**：
+**Troubleshooting Steps**:
 
 ```bash
-# 1. 检查 Service Discovery
+# 1. Check Service Discovery
 aws servicediscovery list-services \
   --region us-east-1 \
   --profile <AWS_PROFILE>
 
-# 2. 验证 Kong 可以解析 functions-service.kong.local
-# 进入 Kong 容器
+# 2. Verify Kong can resolve functions-service.kong.local
+# Enter the Kong container
 KONG_TASK=$(aws ecs list-tasks \
   --cluster <ECS_CLUSTER> \
   --service-name kong-gateway \
@@ -356,7 +356,7 @@ KONG_TASK=$(aws ecs list-tasks \
   --query 'taskArns[0]' \
   --output text)
 
-# 3. 查看 Kong 日志
+# 3. Check Kong logs
 aws logs tail /ecs/supabase \
   --since 10m \
   --filter-pattern "kong" \
@@ -364,19 +364,19 @@ aws logs tail /ecs/supabase \
   --profile <AWS_PROFILE>
 ```
 
-**解决方案**：
-- 确认 Security Group 允许 Kong → Functions Service (端口 8080)
-- 重启 Kong 服务以重新加载配置
-- 验证 Service Discovery DNS 记录
+**Solution**:
+- Confirm the Security Group allows Kong → Functions Service (port 8080)
+- Restart the Kong service to reload the configuration
+- Verify Service Discovery DNS records
 
-### 问题 4：代码更新未生效
+### Issue 4: Code Update Not Taking Effect
 
-**症状**：部署后 API 行为没有改变
+**Symptom**: API behavior does not change after deployment
 
-**排查步骤**：
+**Troubleshooting Steps**:
 
 ```bash
-# 1. 验证 ECR 中的镜像确实是最新的
+# 1. Verify the image in ECR is actually the latest
 aws ecr describe-images \
   --repository-name functions-service \
   --region us-east-1 \
@@ -384,7 +384,7 @@ aws ecr describe-images \
   --query 'sort_by(imageDetails,& imagePushedAt)[-1].[imagePushedAt,imageDigest]' \
   --output table
 
-# 2. 检查 Task 使用的镜像
+# 2. Check the image used by the Task
 aws ecs describe-tasks \
   --cluster <ECS_CLUSTER> \
   --tasks $TASK_ARN \
@@ -394,37 +394,37 @@ aws ecs describe-tasks \
   --output table
 ```
 
-**解决方案**：
-- 确认镜像推送成功（检查推送时间）
-- 强制重新部署 ECS Service：`--force-new-deployment`
-- 等待旧 Task 完全停止，新 Task 启动
+**Solution**:
+- Confirm the image was pushed successfully (check the push time)
+- Force redeploy the ECS Service: `--force-new-deployment`
+- Wait for the old Task to fully stop and the new Task to start
 
-## 📊 部署检查清单
+## 📊 Deployment Checklist
 
-使用此检查清单确保部署成功：
+Use this checklist to ensure the deployment succeeded:
 
-- [ ] Docker 镜像构建成功
-- [ ] 镜像成功推送到 ECR
-- [ ] ECR 中的镜像 digest 已更新
-- [ ] ECS Service 触发了新部署
-- [ ] 新 Task 成功启动
-- [ ] Task 健康检查通过
-- [ ] 旧 Task 已停止
-- [ ] Service 状态为 ACTIVE
+- [ ] Docker image built successfully
+- [ ] Image successfully pushed to ECR
+- [ ] The image digest in ECR has been updated
+- [ ] ECS Service triggered a new deployment
+- [ ] New Task started successfully
+- [ ] Task health check passed
+- [ ] Old Task has stopped
+- [ ] Service status is ACTIVE
 - [ ] RunningCount = DesiredCount
 - [ ] Rollout State = COMPLETED
-- [ ] `/health` 端点返回 200
-- [ ] `/functions` 端点正常响应（使用 X-Project-ID header）
-- [ ] 子域名路由正常工作（`curl https://project-alpha.example.com/functions`）
-- [ ] 子域名中的 project_id 正确提取
-- [ ] 容器日志无错误
+- [ ] `/health` endpoint returns 200
+- [ ] `/functions` endpoint responds correctly (using X-Project-ID header)
+- [ ] Subdomain routing works correctly (`curl https://project-alpha.example.com/functions`)
+- [ ] project_id is correctly extracted from the subdomain
+- [ ] No errors in container logs
 
-## 🔄 回滚步骤
+## 🔄 Rollback Steps
 
-如果新版本有问题，需要回滚到之前的版本：
+If the new version has issues, you need to roll back to a previous version:
 
 ```bash
-# 1. 查看之前的镜像版本
+# 1. View previous image versions
 aws ecr describe-images \
   --repository-name functions-service \
   --region us-east-1 \
@@ -432,8 +432,8 @@ aws ecr describe-images \
   --query 'sort_by(imageDetails,& imagePushedAt)[-5:].[imagePushedAt,imageDigest]' \
   --output table
 
-# 2. 标记旧版本为 latest
-OLD_DIGEST="sha256:xxxxx"  # 从上面获取
+# 2. Tag the old version as latest
+OLD_DIGEST="sha256:xxxxx"  # Obtained from above
 
 aws ecr batch-get-image \
   --repository-name functions-service \
@@ -449,7 +449,7 @@ aws ecr put-image \
   --region us-east-1 \
   --profile <AWS_PROFILE>
 
-# 3. 强制重新部署
+# 3. Force redeployment
 aws ecs update-service \
   --cluster <ECS_CLUSTER> \
   --service functions-service \
@@ -458,42 +458,42 @@ aws ecs update-service \
   --profile <AWS_PROFILE>
 ```
 
-## 📝 开发工作流
+## 📝 Development Workflow
 
-### 本地开发和测试
+### Local Development and Testing
 
 ```bash
-# 1. 进入 functions 目录
+# 1. Go to the functions directory
 cd ~/supabase-on-aws/app/functions
 
-# 2. 安装依赖
+# 2. Install dependencies
 pip3 install -r requirements.txt
 
-# 3. 本地运行
+# 3. Run locally
 python3 app.py
 
-# 4. 在另一个终端测试
+# 4. Test in another terminal
 curl http://localhost:8080/health
 curl -H "X-Project-ID: test" http://localhost:8080/functions
 ```
 
-### 代码修改后的完整流程
+### Full Workflow After Code Changes
 
 ```bash
-# 1. 修改代码
+# 1. Modify the code
 vim app.py
 
-# 2. 本地测试
+# 2. Test locally
 python3 app.py &
 sleep 2
 curl http://localhost:8080/health
 kill %1
 
-# 3. 构建并推送新镜像
+# 3. Build and push the new image
 cd ~/supabase-on-aws
 ./app/build-and-push.sh functions
 
-# 4. 更新 ECS Service
+# 4. Update the ECS Service
 export AWS_PROFILE=<AWS_PROFILE>
 aws ecs update-service \
   --cluster <ECS_CLUSTER> \
@@ -501,7 +501,7 @@ aws ecs update-service \
   --force-new-deployment \
   --region us-east-1
 
-# 5. 监控部署
+# 5. Monitor the deployment
 watch -n 5 'aws ecs describe-services \
   --cluster <ECS_CLUSTER> \
   --services functions-service \
@@ -510,45 +510,45 @@ watch -n 5 'aws ecs describe-services \
   --query "services[0].[serviceName,runningCount,deployments[0].rolloutState]" \
   --output table'
 
-# 6. 测试新版本
+# 6. Test the new version
 curl https://api.example.com/functions/health
 
-# 测试子域名路由（推荐）
+# Test subdomain routing (recommended)
 curl https://project-alpha.example.com/functions
 
-# 预期看到 project_id: "project-alpha"
+# Expect to see project_id: "project-alpha"
 
-# 7. 提交代码
+# 7. Commit the code
 git add .
 git commit -m "Update functions service"
 git push
 ```
 
-## 📚 相关文档
+## 📚 Related Documentation
 
-- [Functions Service README](./README.md) - 服务功能说明
-- [Kong 子域名路由配置](../kong/SUBDOMAIN_ROUTING.md) - 路由配置详情
-- [API 测试指南](/infra/API_TEST_GUIDE.md) - API 测试方法
-- [构建脚本说明](../build-and-push.sh) - 统一构建脚本使用
+- [Functions Service README](./README.md) - Service functionality description
+- [Kong Subdomain Routing Configuration](../kong/SUBDOMAIN_ROUTING.md) - Routing configuration details
+- [API Testing Guide](/infra/API_TEST_GUIDE.md) - API testing methods
+- [Build Script Description](../build-and-push.sh) - How to use the unified build script
 
-## 🆘 获取帮助
+## 🆘 Getting Help
 
-如遇到问题，请提供以下信息：
+If you encounter issues, please provide the following information:
 
-1. **错误描述**：具体的错误信息或异常行为
-2. **部署日志**：CDK 部署输出或 AWS CLI 命令输出
-3. **容器日志**：
+1. **Error Description**: Specific error messages or abnormal behavior
+2. **Deployment Logs**: CDK deployment output or AWS CLI command output
+3. **Container Logs**:
    ```bash
    aws logs tail /ecs/supabase --since 30m \
      --filter-pattern "functions-service" \
      --region us-east-1 --profile <AWS_PROFILE>
    ```
-4. **Task 状态**：
+4. **Task Status**:
    ```bash
    aws ecs describe-tasks --cluster <ECS_CLUSTER> \
      --tasks $TASK_ARN --region us-east-1 --profile <AWS_PROFILE>
    ```
-5. **镜像信息**：
+5. **Image Information**:
    ```bash
    aws ecr describe-images --repository-name functions-service \
      --region us-east-1 --profile <AWS_PROFILE>
@@ -556,6 +556,6 @@ git push
 
 ---
 
-**最后更新**: 2026-02-07
-**维护者**: DevOps Team
-**版本**: v1.0.0
+**Last Updated**: 2026-02-07
+**Maintainer**: DevOps Team
+**Version**: v1.0.0

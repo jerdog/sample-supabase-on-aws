@@ -149,7 +149,7 @@ export class SupabaseStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // 读取配置文件
+    // Read config file
     const configPath = path.join(__dirname, '..', '..', 'config.json');
     const configData = fs.readFileSync(configPath, 'utf8');
     const config: StackConfig = JSON.parse(configData);
@@ -447,7 +447,7 @@ export class SupabaseStack extends cdk.Stack {
       encrypted: true,
       lifecyclePolicy: efs.LifecyclePolicy.AFTER_14_DAYS,
       performanceMode: efs.PerformanceMode.GENERAL_PURPOSE,
-      throughputMode: efs.ThroughputMode.ELASTIC,  // 改为 Elastic 模式，自动扩展吞吐量
+      throughputMode: efs.ThroughputMode.ELASTIC,  // Elastic mode auto-scales throughput
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 

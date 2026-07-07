@@ -20,9 +20,9 @@ interface FunctionsEfsStackProps extends cdk.StackProps {
   serviceDiscoveryNamespaceId?: string;
   serviceDiscoveryServiceId?: string;
   kongSecurityGroupId?: string;
-  // Worker 配置
-  workerMemoryMb?: number;    // Worker 内存限制 (MB)，默认 128
-  workerTimeoutMs?: number;   // Worker 超时时间 (ms)，默认 60000
+  // Worker configuration
+  workerMemoryMb?: number;    // Worker memory limit (MB), default 128
+  workerTimeoutMs?: number;   // Worker timeout (ms), default 60000
 }
 
 export class FunctionsEfsStack extends cdk.Stack {
@@ -31,25 +31,25 @@ export class FunctionsEfsStack extends cdk.Stack {
     
     const createNewService = props.createNewService ?? false;
 
-    // 引用现有 VPC
+    // Reference the existing VPC
     const vpc = ec2.Vpc.fromLookup(this, 'ExistingVpc', {
       vpcId: props.vpcId,
     });
 
-    // 引用现有 ECS 集群
+    // Reference the existing ECS cluster
     const cluster = ecs.Cluster.fromClusterAttributes(this, 'ExistingCluster', {
       clusterName: props.clusterName,
       vpc: vpc,
       securityGroups: [],
     });
 
-    // 创建 EFS 文件系统
+    // Create the EFS file system
     const fileSystem = new efs.FileSystem(this, 'FunctionsFileSystem', {
       vpc: vpc,
       encrypted: true,
       lifecyclePolicy: efs.LifecyclePolicy.AFTER_14_DAYS,
       performanceMode: efs.PerformanceMode.GENERAL_PURPOSE,
-      throughputMode: efs.ThroughputMode.ELASTIC,  // 改为 Elastic 模式，自动扩展吞吐量
+      throughputMode: efs.ThroughputMode.ELASTIC,  // Switched to Elastic mode, auto-scales throughput
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       securityGroup: ec2.SecurityGroup.fromSecurityGroupId(this, 'EfsSG', props.securityGroupId),
       vpcSubnets: {
@@ -59,7 +59,7 @@ export class FunctionsEfsStack extends cdk.Stack {
       },
     });
 
-    // 创建 EFS Access Point
+    // Create the EFS Access Point
     const accessPoint = new efs.AccessPoint(this, 'FunctionsAccessPoint', {
       fileSystem: fileSystem,
       path: '/functions',
@@ -74,7 +74,7 @@ export class FunctionsEfsStack extends cdk.Stack {
       },
     });
 
-    // 输出 EFS ID 和 Access Point ID
+    // Output the EFS ID and Access Point ID
     new cdk.CfnOutput(this, 'FileSystemId', {
       value: fileSystem.fileSystemId,
       description: 'EFS File System ID',
@@ -87,14 +87,14 @@ export class FunctionsEfsStack extends cdk.Stack {
       exportName: 'FunctionsAccessPointId',
     });
 
-    // 配置安全组规则
+    // Configure security group rules
     const functionsSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
       this, 
       'FunctionsSG', 
       props.securityGroupId
     );
     
-    // 允许从 Kong 安全组访问 functions 服务端口 8080
+    // Allow the Kong security group to access the functions service on port 8080
     if (props.kongSecurityGroupId) {
       functionsSecurityGroup.addIngressRule(
         ec2.Peer.securityGroupId(props.kongSecurityGroupId),
@@ -103,11 +103,11 @@ export class FunctionsEfsStack extends cdk.Stack {
       );
     }
 
-    // 如果需要创建新服务
+    // If a new service needs to be created
     if (createNewService) {
       this.createFunctionsService(vpc, cluster, fileSystem, accessPoint, props);
     } else {
-      // 更新现有服务
+      // Update the existing service
       this.updateExistingService(vpc, cluster, fileSystem, accessPoint, props);
     }
   }
@@ -122,7 +122,7 @@ export class FunctionsEfsStack extends cdk.Stack {
     const taskRole = iam.Role.fromRoleArn(this, 'TaskRole', props.taskRoleArn);
     const executionRole = iam.Role.fromRoleArn(this, 'ExecutionRole', props.executionRoleArn);
 
-    // 添加 EFS 访问权限到角色
+    // Add EFS access permissions to the roles
     const addPolicyToRole = new cdk.CustomResource(this, 'AddEfsPolicyToRoles', {
       serviceToken: this.createAddPolicyProvider(fileSystem.fileSystemId).serviceToken,
       properties: {
@@ -134,7 +134,7 @@ export class FunctionsEfsStack extends cdk.Stack {
       },
     });
 
-    // 创建新的任务定义
+    // Create a new task definition
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'FunctionsTask', {
       family: 'SupabaseStackFunctionsTaskA74FCAFB',
       cpu: 256,
@@ -189,7 +189,7 @@ export class FunctionsEfsStack extends cdk.Stack {
       readOnly: false,
     });
 
-    // 使用 Custom Resource 更新现有服务
+    // Use a Custom Resource to update the existing service
     const updateService = new cdk.CustomResource(this, 'UpdateFunctionsService', {
       serviceToken: this.createUpdateServiceProvider(taskDefinition).serviceToken,
       properties: {
@@ -247,14 +247,14 @@ def handler(event, context):
                 }]
             }
             
-            # 添加策略到任务角色
+            # Add the policy to the task role
             iam.put_role_policy(
                 RoleName=props['TaskRoleName'],
                 PolicyName='EFSAccessPolicy',
                 PolicyDocument=json.dumps(policy_document)
             )
             
-            # 添加策略到执行角色
+            # Add the policy to the execution role
             iam.put_role_policy(
                 RoleName=props['ExecutionRoleName'],
                 PolicyName='EFSAccessPolicy',
@@ -308,7 +308,7 @@ def handler(event, context):
                 'forceNewDeployment': True
             }
             
-            # 添加服务发现配置
+            # Add service discovery configuration
             if 'ServiceRegistries' in props and props['ServiceRegistries']:
                 import json
                 update_params['serviceRegistries'] = json.loads(props['ServiceRegistries'])

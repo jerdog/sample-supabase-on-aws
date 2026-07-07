@@ -1,40 +1,40 @@
 #!/bin/bash
 
-# Supabase Docker 管理脚本
+# Supabase Docker management script
 
 DOCKER_DIR="docker"
 
 show_help() {
-    echo "🚀 Supabase Docker 管理脚本"
+    echo "🚀 Supabase Docker management script"
     echo "=========================="
     echo ""
-    echo "使用方法: ./supabase-manage.sh [命令]"
+    echo "Usage: ./supabase-manage.sh [command]"
     echo ""
-    echo "命令："
-    echo "  start       - 启动所有服务"
-    echo "  stop        - 停止所有服务"
-    echo "  restart     - 重启所有服务"
-    echo "  status      - 查看服务状态"
-    echo "  logs        - 查看所有服务日志"
-    echo "  logs [服务] - 查看指定服务日志"
-    echo "  clean       - 停止并删除所有容器和卷（⚠️ 会删除数据）"
-    echo "  reset       - 完全重置（停止、清理、重新启动）"
-    echo "  help        - 显示此帮助信息"
+    echo "Commands:"
+    echo "  start       - Start all services"
+    echo "  stop        - Stop all services"
+    echo "  restart     - Restart all services"
+    echo "  status      - View service status"
+    echo "  logs        - View logs for all services"
+    echo "  logs [service] - View logs for the specified service"
+    echo "  clean       - Stop and remove all containers and volumes (⚠️ this will delete data)"
+    echo "  reset       - Fully reset (stop, clean up, restart)"
+    echo "  help        - Show this help information"
     echo ""
-    echo "示例："
+    echo "Examples:"
     echo "  ./supabase-manage.sh start"
     echo "  ./supabase-manage.sh logs studio"
     echo "  ./supabase-manage.sh status"
 }
 
 start_services() {
-    echo "🚀 启动 Supabase 服务..."
+    echo "🚀 Starting Supabase services..."
     cd "$DOCKER_DIR"
     docker compose up -d
     echo ""
-    echo "✅ 服务已启动"
+    echo "✅ Services started"
     echo ""
-    echo "🌐 访问地址："
+    echo "🌐 Access URLs:"
     echo "   - Supabase Studio: http://localhost:3000"
     echo "   - API Gateway:      http://localhost:8000"
     echo "   - Database:         localhost:5432"
@@ -42,21 +42,21 @@ start_services() {
 }
 
 stop_services() {
-    echo "🛑 停止 Supabase 服务..."
+    echo "🛑 Stopping Supabase services..."
     cd "$DOCKER_DIR"
     docker compose down
-    echo "✅ 服务已停止"
+    echo "✅ Services stopped"
 }
 
 restart_services() {
-    echo "🔄 重启 Supabase 服务..."
+    echo "🔄 Restarting Supabase services..."
     cd "$DOCKER_DIR"
     docker compose restart
-    echo "✅ 服务已重启"
+    echo "✅ Services restarted"
 }
 
 show_status() {
-    echo "📊 Supabase 服务状态"
+    echo "📊 Supabase service status"
     echo "===================="
     echo ""
     cd "$DOCKER_DIR"
@@ -66,30 +66,30 @@ show_status() {
 show_logs() {
     cd "$DOCKER_DIR"
     if [ -z "$1" ]; then
-        echo "📚 查看所有服务日志（Ctrl+C 退出）..."
+        echo "📚 Viewing logs for all services (Ctrl+C to exit)..."
         docker compose logs -f
     else
-        echo "📚 查看 $1 服务日志（Ctrl+C 退出）..."
+        echo "📚 Viewing logs for the $1 service (Ctrl+C to exit)..."
         docker compose logs -f "$1"
     fi
 }
 
 clean_all() {
-    echo "⚠️  警告: 此操作将删除所有容器和数据卷！"
-    read -p "确定要继续吗？(yes/no) " -r
+    echo "⚠️  Warning: this will delete all containers and data volumes!"
+    read -p "Are you sure you want to continue? (yes/no) " -r
     echo ""
     if [[ $REPLY == "yes" ]]; then
-        echo "🧹 清理所有容器和数据..."
+        echo "🧹 Cleaning up all containers and data..."
         cd "$DOCKER_DIR"
         docker compose down -v --remove-orphans
-        echo "✅ 清理完成"
+        echo "✅ Cleanup complete"
     else
-        echo "已取消"
+        echo "Cancelled"
     fi
 }
 
 reset_all() {
-    echo "🔄 完全重置 Supabase..."
+    echo "🔄 Fully resetting Supabase..."
     clean_all
     if [[ $REPLY == "yes" ]]; then
         echo ""
@@ -97,7 +97,7 @@ reset_all() {
     fi
 }
 
-# 主逻辑
+# Main logic
 case "$1" in
     start)
         start_services
@@ -124,7 +124,7 @@ case "$1" in
         show_help
         ;;
     *)
-        echo "❌ 未知命令: $1"
+        echo "❌ Unknown command: $1"
         echo ""
         show_help
         exit 1

@@ -1,28 +1,28 @@
 # Supabase Edge Functions Service
 
-Official Supabase Edge Runtime 部署在 AWS ECS，支持通过 HTTP 和 Supabase SDK 调用 Deno 函数。
+The official Supabase Edge Runtime deployed on AWS ECS, supporting Deno function invocation via HTTP and the Supabase SDK.
 
-## 特性
+## Features
 
-- ✅ **官方 Runtime**: 使用 `public.ecr.aws/supabase/edge-runtime:v1.69.28`
-- ✅ **EFS 持久化**: 函数文件存储在 EFS，容器重启后依然存在
-- ✅ **动态加载**: Main service 路由器动态加载函数
-- ✅ **SDK 兼容**: 完全兼容 Supabase JS SDK
-- ✅ **Kong 集成**: 通过 Kong Gateway 路由和 CORS 支持
-- ✅ **Service Discovery**: AWS Cloud Map 自动服务发现
+- ✅ **Official Runtime**: Uses `public.ecr.aws/supabase/edge-runtime:v1.69.28`
+- ✅ **EFS Persistence**: Function files are stored on EFS and persist across container restarts
+- ✅ **Dynamic Loading**: The main service router dynamically loads functions
+- ✅ **SDK Compatible**: Fully compatible with the Supabase JS SDK
+- ✅ **Kong Integration**: Routing and CORS support via Kong Gateway
+- ✅ **Service Discovery**: Automatic service discovery via AWS Cloud Map
 
-## 快速开始
+## Quick Start
 
-### 部署服务
+### Deploy the Service
 
 ```bash
 cd /Users/yonghs/Downloads/supabase-on-aws-main/app/functions
 ./deploy.sh
 ```
 
-### 添加新函数
+### Add a New Function
 
-1. 创建函数文件 `my-function.ts`：
+1. Create the function file `my-function.ts`:
 
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -35,23 +35,23 @@ serve((req) => {
 })
 ```
 
-2. 部署函数：
+2. Deploy the function:
 
 ```bash
 ./add-function.sh my-function ./my-function.ts
 ```
 
-### 测试函数
+### Test the Function
 
 ```bash
-# 直接调用
+# Direct call
 curl https://project-alpha.example.com/functions/my-function
 
-# SDK 路径
+# SDK path
 curl https://project-alpha.example.com/functions/v1/my-function
 ```
 
-## 使用 Supabase SDK
+## Using the Supabase SDK
 
 ```javascript
 import { createClient } from '@supabase/supabase-js'
@@ -61,7 +61,7 @@ const supabase = createClient(
   'YOUR_ANON_KEY'
 )
 
-// 调用函数
+// Call the function
 const { data, error } = await supabase.functions.invoke('my-function', {
   body: { name: 'World' }
 })
@@ -69,12 +69,12 @@ const { data, error } = await supabase.functions.invoke('my-function', {
 console.log(data)
 ```
 
-## 架构
+## Architecture
 
 ```
 Client → ALB → Kong Gateway → Functions Service (ECS)
                                     ↓
-                              Main Service (路由器)
+                              Main Service (router)
                                     ↓
                               EFS (/home/deno/functions)
                                     ├─ main/
@@ -82,45 +82,45 @@ Client → ALB → Kong Gateway → Functions Service (ECS)
                                     └─ your-function/
 ```
 
-## 目录结构
+## Directory Structure
 
 ```
 app/functions/
-├── deploy.sh              # 部署脚本
-├── add-function.sh        # 添加函数脚本
-├── DEPLOYMENT.md          # 详细部署文档
-└── README.md              # 本文件
+├── deploy.sh              # Deployment script
+├── add-function.sh        # Add-function script
+├── DEPLOYMENT.md          # Detailed deployment documentation
+└── README.md              # This file
 ```
 
-## 技术栈
+## Tech Stack
 
 - **Runtime**: Deno (Supabase Edge Runtime)
-- **镜像**: `public.ecr.aws/supabase/edge-runtime:v1.69.28`
-- **存储**: AWS EFS
-- **网络**: AWS Cloud Map
-- **网关**: Kong Gateway
-- **计算**: ECS Fargate (256 CPU, 512 MB)
+- **Image**: `public.ecr.aws/supabase/edge-runtime:v1.69.28`
+- **Storage**: AWS EFS
+- **Networking**: AWS Cloud Map
+- **Gateway**: Kong Gateway
+- **Compute**: ECS Fargate (256 CPU, 512 MB)
 
-## 端点
+## Endpoints
 
 - **Health**: `https://project-alpha.example.com/functions/health`
 - **Functions**: `https://project-alpha.example.com/functions/v1/{function-name}`
 
-## 监控
+## Monitoring
 
 ```bash
-# 查看日志
+# View logs
 aws logs tail /ecs/supabase --since 10m --filter-pattern functions-service --region us-east-1
 
-# 查看服务状态
+# Check service status
 aws ecs describe-services --cluster <ECS_CLUSTER> --services functions-service --region us-east-1
 ```
 
-## 文档
+## Documentation
 
-详细部署和故障排除文档请查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
+For detailed deployment and troubleshooting documentation, see [DEPLOYMENT.md](./DEPLOYMENT.md)
 
-## 示例函数
+## Example Functions
 
 ### Hello World
 
@@ -135,7 +135,7 @@ serve((req) => {
 })
 ```
 
-### 带参数的函数
+### Function with Parameters
 
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -153,6 +153,6 @@ serve(async (req) => {
 })
 ```
 
-## 许可
+## License
 
 MIT

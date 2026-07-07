@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# Supabase Studio 构建和启动脚本
-# 用于构建自定义 Studio 镜像并启动所有服务
+# Supabase Studio build and start script
+# Used to build the custom Studio image and start all services
 
-set -e  # 遇到错误立即退出
+set -e  # Exit immediately on error
 
-# 颜色定义
+# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 配置
+# Configuration
 DOCKER_DIR="docker"
 STUDIO_IMAGE="supabase-studio-local:latest"
 DOCKERFILE_PATH="apps/studio/Dockerfile"
 
-# 打印带颜色的消息
+# Print colored messages
 print_info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
@@ -42,222 +42,222 @@ print_header() {
     echo ""
 }
 
-# 显示帮助信息
+# Show help information
 show_help() {
     cat << EOF
-🚀 Supabase Studio 构建和启动脚本
+🚀 Supabase Studio build and start script
 
-使用方法: ./build-and-start.sh [选项]
+Usage: ./build-and-start.sh [options]
 
-选项：
-  --build-only        只构建镜像，不启动服务
-  --no-cache          构建时不使用缓存（完全重新构建）
-  --skip-build        跳过构建，直接启动服务
-  --stop              停止所有服务
-  --restart           重启所有服务
-  --status            查看服务状态
-  --logs [服务名]     查看日志（不指定服务名则查看所有日志）
-  --clean             停止服务并清理容器和卷
-  --help, -h          显示此帮助信息
+Options:
+  --build-only        Only build the image, do not start services
+  --no-cache          Build without using cache (full rebuild)
+  --skip-build        Skip the build and start services directly
+  --stop              Stop all services
+  --restart           Restart all services
+  --status            View service status
+  --logs [service]    View logs (view all logs if no service is specified)
+  --clean             Stop services and clean up containers and volumes
+  --help, -h          Show this help information
 
-示例：
-  ./build-and-start.sh                    # 构建镜像并启动服务
-  ./build-and-start.sh --build-only       # 只构建镜像
-  ./build-and-start.sh --no-cache         # 完全重新构建并启动
-  ./build-and-start.sh --skip-build       # 跳过构建直接启动
-  ./build-and-start.sh --logs studio      # 查看 studio 服务日志
-  ./build-and-start.sh --stop             # 停止所有服务
+Examples:
+  ./build-and-start.sh                    # Build the image and start services
+  ./build-and-start.sh --build-only       # Only build the image
+  ./build-and-start.sh --no-cache         # Full rebuild and start
+  ./build-and-start.sh --skip-build       # Skip the build and start directly
+  ./build-and-start.sh --logs studio      # View logs for the studio service
+  ./build-and-start.sh --stop             # Stop all services
 
 EOF
 }
 
-# 检查 Docker 是否运行
+# Check whether Docker is running
 check_docker() {
-    print_info "检查 Docker 环境..."
+    print_info "Checking Docker environment..."
     if ! docker info > /dev/null 2>&1; then
-        print_error "Docker 未运行，请先启动 Docker"
+        print_error "Docker is not running, please start Docker first"
         exit 1
     fi
-    print_success "Docker 运行正常"
+    print_success "Docker is running normally"
 }
 
-# 检查必要文件
+# Check required files
 check_files() {
-    print_info "检查必要文件..."
-    
+    print_info "Checking required files..."
+
     if [ ! -f "$DOCKERFILE_PATH" ]; then
-        print_error "Dockerfile 不存在: $DOCKERFILE_PATH"
+        print_error "Dockerfile does not exist: $DOCKERFILE_PATH"
         exit 1
     fi
-    
+
     if [ ! -f "$DOCKER_DIR/docker-compose.yml" ]; then
-        print_error "docker-compose.yml 不存在: $DOCKER_DIR/docker-compose.yml"
+        print_error "docker-compose.yml does not exist: $DOCKER_DIR/docker-compose.yml"
         exit 1
     fi
-    
+
     if [ ! -f "$DOCKER_DIR/.env" ]; then
-        print_warning ".env 文件不存在，将使用默认配置"
+        print_warning ".env file does not exist, default configuration will be used"
     fi
-    
-    print_success "文件检查完成"
+
+    print_success "File check complete"
 }
 
-# 构建 Studio 镜像
+# Build the Studio image
 build_studio() {
     local no_cache=$1
-    
-    print_header "构建 Supabase Studio 镜像"
-    
-    print_info "镜像名称: $STUDIO_IMAGE"
+
+    print_header "Building Supabase Studio image"
+
+    print_info "Image name: $STUDIO_IMAGE"
     print_info "Dockerfile: $DOCKERFILE_PATH"
-    
-    # 构建参数
+
+    # Build arguments
     BUILD_ARGS="--target production -t $STUDIO_IMAGE -f $DOCKERFILE_PATH"
-    
+
     if [ "$no_cache" = "true" ]; then
-        print_warning "使用 --no-cache 选项，将完全重新构建"
+        print_warning "Using the --no-cache option, will do a full rebuild"
         BUILD_ARGS="$BUILD_ARGS --no-cache"
     fi
-    
-    print_info "开始构建..."
+
+    print_info "Starting build..."
     echo ""
-    
-    # 执行构建
+
+    # Run the build
     if docker build $BUILD_ARGS .; then
         echo ""
-        print_success "镜像构建成功: $STUDIO_IMAGE"
-        
-        # 显示镜像信息
-        print_info "镜像信息:"
+        print_success "Image built successfully: $STUDIO_IMAGE"
+
+        # Show image info
+        print_info "Image info:"
         docker images $STUDIO_IMAGE --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
     else
         echo ""
-        print_error "镜像构建失败"
+        print_error "Image build failed"
         exit 1
     fi
 }
 
-# 启动服务
+# Start services
 start_services() {
-    print_header "启动 Supabase 服务"
-    
+    print_header "Starting Supabase services"
+
     cd "$DOCKER_DIR"
-    
-    print_info "启动所有服务..."
+
+    print_info "Starting all services..."
     if docker compose up -d; then
         echo ""
-        print_success "服务启动成功"
+        print_success "Services started successfully"
         echo ""
-        print_info "🌐 访问地址："
+        print_info "🌐 Access URLs:"
         echo "   - Supabase Studio: http://localhost:3000"
         echo "   - API Gateway:      http://localhost:8000"
         echo "   - Database:         localhost:5432"
         echo "   - Analytics:        http://localhost:4000"
         echo ""
-        print_info "💡 提示："
-        echo "   - 查看日志: ./build-and-start.sh --logs"
-        echo "   - 查看状态: ./build-and-start.sh --status"
-        echo "   - 停止服务: ./build-and-start.sh --stop"
+        print_info "💡 Tips:"
+        echo "   - View logs: ./build-and-start.sh --logs"
+        echo "   - View status: ./build-and-start.sh --status"
+        echo "   - Stop services: ./build-and-start.sh --stop"
     else
-        print_error "服务启动失败"
+        print_error "Failed to start services"
         exit 1
     fi
-    
+
     cd - > /dev/null
 }
 
-# 停止服务
+# Stop services
 stop_services() {
-    print_header "停止 Supabase 服务"
-    
+    print_header "Stopping Supabase services"
+
     cd "$DOCKER_DIR"
-    
+
     if docker compose down; then
-        print_success "服务已停止"
+        print_success "Services stopped"
     else
-        print_error "停止服务失败"
+        print_error "Failed to stop services"
         exit 1
     fi
-    
+
     cd - > /dev/null
 }
 
-# 重启服务
+# Restart services
 restart_services() {
-    print_header "重启 Supabase 服务"
-    
+    print_header "Restarting Supabase services"
+
     cd "$DOCKER_DIR"
-    
+
     if docker compose restart; then
-        print_success "服务已重启"
+        print_success "Services restarted"
     else
-        print_error "重启服务失败"
+        print_error "Failed to restart services"
         exit 1
     fi
-    
+
     cd - > /dev/null
 }
 
-# 查看服务状态
+# View service status
 show_status() {
-    print_header "Supabase 服务状态"
-    
+    print_header "Supabase service status"
+
     cd "$DOCKER_DIR"
     docker compose ps
     cd - > /dev/null
 }
 
-# 查看日志
+# View logs
 show_logs() {
     local service=$1
-    
+
     cd "$DOCKER_DIR"
-    
+
     if [ -z "$service" ]; then
-        print_info "查看所有服务日志（Ctrl+C 退出）..."
+        print_info "Viewing logs for all services (Ctrl+C to exit)..."
         docker compose logs -f
     else
-        print_info "查看 $service 服务日志（Ctrl+C 退出）..."
+        print_info "Viewing logs for the $service service (Ctrl+C to exit)..."
         docker compose logs -f "$service"
     fi
-    
+
     cd - > /dev/null
 }
 
-# 清理服务和数据
+# Clean up services and data
 clean_all() {
-    print_header "清理 Supabase 服务"
-    
-    print_warning "此操作将停止所有服务并删除容器和数据卷"
-    read -p "确定要继续吗？(yes/no) " -r
+    print_header "Cleaning up Supabase services"
+
+    print_warning "This will stop all services and delete containers and data volumes"
+    read -p "Are you sure you want to continue? (yes/no) " -r
     echo ""
-    
+
     if [[ $REPLY == "yes" ]]; then
         cd "$DOCKER_DIR"
-        
-        print_info "停止并清理所有容器和数据..."
+
+        print_info "Stopping and cleaning up all containers and data..."
         if docker compose down -v --remove-orphans; then
-            print_success "清理完成"
+            print_success "Cleanup complete"
         else
-            print_error "清理失败"
+            print_error "Cleanup failed"
             exit 1
         fi
-        
+
         cd - > /dev/null
     else
-        print_info "已取消"
+        print_info "Cancelled"
     fi
 }
 
-# 主函数
+# Main function
 main() {
     local build_only=false
     local no_cache=false
     local skip_build=false
     local action="build_and_start"
     local log_service=""
-    
-    # 解析参数
+
+    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --build-only)
@@ -303,15 +303,15 @@ main() {
                 exit 0
                 ;;
             *)
-                print_error "未知选项: $1"
+                print_error "Unknown option: $1"
                 echo ""
                 show_help
                 exit 1
                 ;;
         esac
     done
-    
-    # 执行操作
+
+    # Perform the requested action
     case $action in
         build)
             check_docker
@@ -348,5 +348,5 @@ main() {
     esac
 }
 
-# 运行主函数
+# Run the main function
 main "$@"

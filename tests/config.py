@@ -1,36 +1,36 @@
 """
-测试配置文件
-包含所有测试所需的配置和常量
+Test configuration file
+Contains all configuration and constants required by the tests
 """
 
 import json
 import os
 
 # ============================================
-# 从根目录 config.json 读取配置（单一事实源）
+# Read configuration from the root config.json (single source of truth)
 # ============================================
 _config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
 with open(_config_path) as _f:
     _global_config = json.load(_f)
 
 # ============================================
-# 基础配置
+# Base configuration
 # ============================================
 
-# 域名配置
+# Domain configuration
 BASE_DOMAIN = _global_config["domain"]["baseDomain"]
 ALB_DOMAIN = os.getenv("ALB_DOMAIN", "")
 
-# AWS 配置
+# AWS configuration
 AWS_REGION = _global_config["project"]["region"]
 AWS_ACCOUNT_ID = _global_config["project"]["accountId"]
 ECS_CLUSTER = _global_config["infraStack"]["cluster"]["name"]
 
 # ============================================
-# 服务配置
+# Service configuration
 # ============================================
 
-# 支持的服务列表
+# List of supported services
 SERVICES = {
     "kong-gateway": {
         "ecs_service": "kong-gateway",
@@ -46,18 +46,18 @@ SERVICES = {
     "postgrest": {
         "path_prefix": "/rest/v1",
         "test_endpoints": [
-            "/",  # OpenAPI 文档
+            "/",  # OpenAPI docs
         ],
     },
 }
 
 # ============================================
-# 测试项目配置
+# Test project configuration
 # ============================================
 
-# 测试项目列表（用于多租户测试）
-# 所有项目路由到 postgrest-test-sdk-jwt Lambda
-# JWT 使用 test-sdk-jwt 的 jwt_secret 签发，ref=project-alpha
+# List of test projects (for multi-tenant testing)
+# All projects route to the postgrest-test-sdk-jwt Lambda
+# JWT issued using test-sdk-jwt's jwt_secret, ref=project-alpha
 TEST_PROJECTS = [
     {
         "id": "project-alpha",
@@ -68,39 +68,39 @@ TEST_PROJECTS = [
 ]
 
 # ============================================
-# Supabase 配置
+# Supabase configuration
 # ============================================
 
-# Supabase 匿名密钥（用于 SDK 测试）— role=anon, signed with test-sdk-jwt secret
+# Supabase anon key (for SDK testing) — role=anon, signed with test-sdk-jwt secret
 SUPABASE_ANON_KEY = os.getenv(
     "SUPABASE_ANON_KEY",
     "<your-supabase-anon-key>"
 )
 
-# Supabase Service Role Key（用于管理操作）— role=service_role, signed with test-sdk-jwt secret
+# Supabase Service Role Key (for admin operations) — role=service_role, signed with test-sdk-jwt secret
 SUPABASE_SERVICE_ROLE_KEY = os.getenv(
     "SUPABASE_SERVICE_ROLE_KEY",
     "<your-supabase-service-role-key>"
 )
 
 # ============================================
-# 超时和性能配置
+# Timeout and performance configuration
 # ============================================
 
-# 超时配置（秒）
+# Timeout configuration (seconds)
 TIMEOUTS = {
     "connection": 5,
     "read": 30,
     "health_check": 10,
 }
 
-# 性能基准
+# Performance benchmarks
 PERFORMANCE_BENCHMARKS = {
     "health_check": 5000,  # ms
     "api_response": 2000,  # ms
 }
 
-# 重试配置
+# Retry configuration
 RETRY_CONFIG = {
     "max_attempts": 3,
     "backoff_factor": 2,
@@ -108,19 +108,19 @@ RETRY_CONFIG = {
 }
 
 # ============================================
-# 辅助函数
+# Helper functions
 # ============================================
 
 def get_alb_url(path: str = "") -> str:
-    """获取 ALB URL"""
+    """Get the ALB URL"""
     return f"https://{ALB_DOMAIN}{path}"
 
 def get_subdomain_url(project_id: str, path: str = "") -> str:
-    """获取子域名 URL"""
+    """Get the subdomain URL"""
     return f"https://{project_id}.{BASE_DOMAIN}{path}"
 
 def get_service_url(service_name: str, use_alb: bool = True) -> str:
-    """获取服务 URL"""
+    """Get the service URL"""
     service = SERVICES.get(service_name, {})
     path = service.get("path_prefix", "")
     health = service.get("health_endpoint", "")
@@ -128,19 +128,19 @@ def get_service_url(service_name: str, use_alb: bool = True) -> str:
     if use_alb:
         return get_alb_url(path + health)
     else:
-        # 使用第一个测试项目的子域名
+        # Use the subdomain of the first test project
         return get_subdomain_url(TEST_PROJECTS[0]["id"], path + health)
 
 
 if __name__ == "__main__":
-    # 测试配置
-    print("=== 测试配置验证 ===")
+    # Test configuration
+    print("=== Test configuration verification ===")
     print(f"Base Domain: {BASE_DOMAIN}")
     print(f"ALB Domain: {ALB_DOMAIN}")
     print(f"AWS Region: {AWS_REGION}")
-    print(f"\n服务列表:")
+    print(f"\nServices:")
     for service_name in SERVICES.keys():
         print(f"  - {service_name}")
-    print(f"\n测试项目:")
+    print(f"\nTest projects:")
     for project in TEST_PROJECTS:
         print(f"  - {project['id']}: {project['subdomain']}")

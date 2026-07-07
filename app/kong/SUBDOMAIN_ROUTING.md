@@ -1,42 +1,42 @@
-# 子域名路由配置 (Subdomain Routing)
+# Subdomain Routing Configuration (Subdomain Routing)
 
-## 📋 功能说明
+## 📋 Feature Overview
 
-Kong Gateway 现在支持从子域名自动提取 `project-id` 并将其设置为 `X-Project-ID` header，然后转发到后端服务。
+Kong Gateway now supports automatically extracting the `project-id` from the subdomain, setting it as the `X-Project-ID` header, and forwarding it to the backend service.
 
-## 🎯 使用场景
+## 🎯 Use Cases
 
-### 1. 通过子域名访问 Functions 服务
+### 1. Accessing the Functions service via subdomain
 
-**访问方式**:
+**Access method**:
 ```
 https://project-alpha.example.com/functions
 ```
 
-**行为**:
-- Kong 从子域名提取 `project-alpha`
-- 自动设置 header: `X-Project-ID: project-alpha`
-- 转发到 `functions-service.kong.local:8080/functions`
-- Functions 服务接收到 `X-Project-ID: project-alpha`
+**Behavior**:
+- Kong extracts `project-alpha` from the subdomain
+- Automatically sets the header: `X-Project-ID: project-alpha`
+- Forwards to `functions-service.kong.local:8080/functions`
+- The Functions service receives `X-Project-ID: project-alpha`
 
-### 2. 通过主域名 + Header 访问
+### 2. Accessing via the main domain + header
 
-**访问方式**:
+**Access method**:
 ```bash
 curl -H "X-Project-ID: project-alpha" \
   https://api.example.com/functions
 ```
 
-**行为**:
-- Kong 检测到 `X-Project-ID` header 已存在
-- 直接转发 header 到后端服务
-- Functions 服务接收到 `X-Project-ID: project-alpha`
+**Behavior**:
+- Kong detects that the `X-Project-ID` header already exists
+- Forwards the header directly to the backend service
+- The Functions service receives `X-Project-ID: project-alpha`
 
-## 🔧 技术实现
+## 🔧 Technical Implementation
 
-### Kong 配置
+### Kong configuration
 
-**文件**: `/app/kong/kong.yml`
+**File**: `/app/kong/kong.yml`
 
 ```yaml
 services:
@@ -47,18 +47,18 @@ services:
         paths:
           - /functions
         strip_path: false
-        # 匹配所有 *.example.com 子域名
+        # Matches all *.example.com subdomains
         hosts:
           - "*.example.com"
           - "api.example.com"
     plugins:
-      # 1. CORS 支持
+      # 1. CORS support
       - name: cors
         config:
           origins: ["*"]
           methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
-      # 2. 从子域名提取 project-id
+      # 2. Extract project-id from the subdomain
       - name: pre-function
         config:
           access:
@@ -78,37 +78,37 @@ services:
               end
 ```
 
-### 提取逻辑
+### Extraction logic
 
-1. **检查 X-Project-ID header**:
-   - 如果已存在，直接转发
+1. **Check the X-Project-ID header**:
+   - If it already exists, forward it directly
 
-2. **从 Host header 提取**:
-   - 匹配模式: `([^%.]+)%.example%.com`
-   - 提取第一个子域名部分
+2. **Extract from the Host header**:
+   - Match pattern: `([^%.]+)%.example%.com`
+   - Extract the first subdomain segment
 
-3. **特殊处理**:
-   - `api.example.com`: 不提取 project-id（保持原 header）
-   - 其他子域名: 提取为 project-id
+3. **Special handling**:
+   - `api.example.com`: does not extract a project-id (keeps the original header)
+   - Other subdomains: extracted as the project-id
 
-## 📝 使用示例
+## 📝 Usage Examples
 
-### 示例 1: 子域名访问
+### Example 1: Access via subdomain
 
 ```bash
-# 请求
+# Request
 curl https://my-project.example.com/functions
 
-# Kong 处理
-# 1. 从 Host: my-project.example.com 提取 "my-project"
-# 2. 设置 X-Project-ID: my-project
-# 3. 转发到 functions-service
+# Kong processing
+# 1. Extracts "my-project" from Host: my-project.example.com
+# 2. Sets X-Project-ID: my-project
+# 3. Forwards to functions-service
 
-# Functions 服务接收
+# Functions service receives
 # GET /functions
 # Headers: X-Project-ID: my-project
 
-# 响应
+# Response
 {
   "service": "Functions Service",
   "project_id": "my-project",
@@ -118,17 +118,17 @@ curl https://my-project.example.com/functions
 }
 ```
 
-### 示例 2: 子域名 + 子路径
+### Example 2: Subdomain + subpath
 
 ```bash
-# 请求
+# Request
 curl https://project-alpha.example.com/functions/hello-world
 
-# Kong 处理
-# 提取: project-alpha
-# 路径: /functions/hello-world (保持不变)
+# Kong processing
+# Extracted: project-alpha
+# Path: /functions/hello-world (unchanged)
 
-# 响应
+# Response
 {
   "service": "Functions Service",
   "project_id": "project-alpha",
@@ -138,16 +138,16 @@ curl https://project-alpha.example.com/functions/hello-world
 }
 ```
 
-### 示例 3: POST 请求
+### Example 3: POST request
 
 ```bash
-# 请求
+# Request
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"name": "test", "value": 123}' \
   https://project-beta.example.com/functions/execute
 
-# 响应
+# Response
 {
   "service": "Functions Service",
   "project_id": "project-beta",
@@ -161,18 +161,18 @@ curl -X POST \
 }
 ```
 
-### 示例 4: 主域名 + Header
+### Example 4: Main domain + header
 
 ```bash
-# 请求
+# Request
 curl -H "X-Project-ID: custom-project" \
   https://api.example.com/functions
 
-# Kong 处理
-# 检测到已有 X-Project-ID header
-# 直接转发
+# Kong processing
+# Detects that the X-Project-ID header already exists
+# Forwards it directly
 
-# 响应
+# Response
 {
   "service": "Functions Service",
   "project_id": "custom-project",
@@ -181,58 +181,58 @@ curl -H "X-Project-ID: custom-project" \
 }
 ```
 
-## 🔍 验证和调试
+## 🔍 Verification and Debugging
 
-### 1. 查看 Kong 日志
+### 1. View Kong logs
 
 ```bash
-# 查看 Kong 日志
+# View Kong logs
 aws logs tail /ecs/supabase --since 10m \
   --filter-pattern "Extracted project-id" \
   --region us-east-1 \
   --profile <AWS_PROFILE>
 ```
 
-**预期输出**:
+**Expected output**:
 ```
 Extracted project-id from subdomain: project-alpha
 Using existing X-Project-ID: custom-project
 ```
 
-### 2. 测试不同的子域名
+### 2. Test different subdomains
 
 ```bash
-# Test 1: 简单项目名
+# Test 1: Simple project name
 curl https://test.example.com/functions
 
-# Test 2: 带连字符的项目名
+# Test 2: Project name with a hyphen
 curl https://my-project-123.example.com/functions
 
-# Test 3: 纯数字项目名
+# Test 3: Numeric-only project name
 curl https://12345.example.com/functions
 
-# Test 4: API 域名（不应提取 project-id）
+# Test 4: API domain (should not extract a project-id)
 curl https://api.example.com/functions
-# 预期: 没有 project_id 或者显示为 null
+# Expected: no project_id, or it shows as null
 ```
 
-### 3. 验证 Functions 服务接收
+### 3. Verify the Functions service receives it
 
 ```bash
-# 查看 Functions 服务日志
+# View Functions service logs
 aws logs tail /ecs/supabase --since 5m \
   --filter-pattern "functions-service" \
   --region us-east-1 \
   --profile <AWS_PROFILE>
 ```
 
-## 🌐 DNS 配置要求
+## 🌐 DNS Configuration Requirements
 
-为了使子域名路由工作，需要配置 DNS：
+For subdomain routing to work, DNS must be configured as follows:
 
-### 泛域名解析
+### Wildcard DNS resolution
 
-**DNS 记录**:
+**DNS record**:
 ```
 Type: CNAME
 Name: *.example.com
@@ -240,63 +240,63 @@ Value: <ALB_DNS_NAME>
 TTL: 300
 ```
 
-**说明**:
-- 泛域名 `*` 会匹配所有子域名
-- 所有子域名都会解析到同一个 ALB
-- Kong 根据 Host header 路由到不同服务
+**Notes**:
+- The wildcard `*` matches all subdomains
+- All subdomains resolve to the same ALB
+- Kong routes to different services based on the Host header
 
-### 测试 DNS 解析
+### Test DNS resolution
 
 ```bash
-# 测试泛域名解析
+# Test wildcard resolution
 nslookup test-project.example.com
 nslookup my-app.example.com
 nslookup any-subdomain.example.com
 
-# 预期: 所有子域名都解析到 ALB IP
+# Expected: all subdomains resolve to the ALB IP
 ```
 
-## 📊 路由优先级
+## 📊 Route Priority
 
-Kong 的路由匹配优先级（从高到低）:
+Kong's route matching priority (from highest to lowest):
 
-1. **完全匹配**: 精确的 host + path 组合
-2. **正则匹配**: regex_priority 高的路由
-3. **通配符匹配**: `*.example.com`
+1. **Exact match**: precise host + path combination
+2. **Regex match**: routes with a higher regex_priority
+3. **Wildcard match**: `*.example.com`
 
-当前配置:
-- `/functions` 路径 + `*.example.com` host
-- 任何子域名访问 `/functions` 都会匹配此路由
+Current configuration:
+- `/functions` path + `*.example.com` host
+- Any subdomain accessing `/functions` will match this route
 
-## 🔒 安全考虑
+## 🔒 Security Considerations
 
-### 1. Project ID 验证
+### 1. Project ID validation
 
-建议在 Functions 服务中验证 project-id:
+It is recommended to validate the project-id in the Functions service:
 
 ```python
 @app.route('/functions')
 def functions():
     project_id = request.headers.get('X-Project-ID')
 
-    # 验证 project-id 格式
+    # Validate the project-id format
     if not project_id or not is_valid_project_id(project_id):
         return jsonify({"error": "Invalid or missing project ID"}), 400
 
-    # 验证 project-id 是否存在
+    # Verify the project-id exists
     if not project_exists(project_id):
         return jsonify({"error": "Project not found"}), 404
 
-    # 处理请求
+    # Handle the request
     return process_request(project_id)
 ```
 
-### 2. 速率限制
+### 2. Rate limiting
 
-建议为不同 project-id 设置独立的速率限制：
+It is recommended to set independent rate limits for different project-ids:
 
 ```yaml
-# Kong 配置
+# Kong configuration
 plugins:
   - name: rate-limiting
     config:
@@ -305,9 +305,9 @@ plugins:
       header_name: X-Project-ID
 ```
 
-### 3. 访问控制
+### 3. Access control
 
-可以基于 project-id 实现访问控制：
+Access control can be implemented based on project-id:
 
 ```lua
 -- Kong pre-function
@@ -319,30 +319,30 @@ if not contains(allowed_projects, project_id) then
 end
 ```
 
-## 🚀 部署步骤
+## 🚀 Deployment Steps
 
-1. ✅ **更新 Kong 配置** (`kong.yml`)
-2. ✅ **重新构建 Kong 镜像**
+1. ✅ **Update Kong configuration** (`kong.yml`)
+2. ✅ **Rebuild the Kong image**
    ```bash
    ./build-and-push.sh kong
    ```
 
-3. ✅ **部署到 ECS**
+3. ✅ **Deploy to ECS**
    ```bash
    cd ../infra
    cdk deploy SupabaseStack
    ```
 
-4. ⏳ **配置 DNS 泛域名解析**
-   - 添加 `*.example.com` CNAME 记录
-   - 指向 ALB DNS
+4. ⏳ **Configure wildcard DNS resolution**
+   - Add a `*.example.com` CNAME record
+   - Point it to the ALB DNS
 
-5. ⏳ **测试验证**
+5. ⏳ **Test and verify**
    ```bash
    curl https://test-project.example.com/functions
    ```
 
-## 📚 相关文档
+## 📚 Related Documentation
 
 - [Functions Service README](/app/functions/README.md)
 - [Kong Gateway Configuration](/app/kong/kong.yml)
@@ -350,6 +350,6 @@ end
 
 ---
 
-**最后更新**: 2026-02-07
-**Kong 版本**: 3.5
-**配置文件**: `/app/kong/kong.yml`
+**Last updated**: 2026-02-07
+**Kong version**: 3.5
+**Configuration file**: `/app/kong/kong.yml`

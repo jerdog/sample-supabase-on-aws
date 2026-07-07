@@ -3,13 +3,13 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# 服务配置
+# Service configuration
 SERVICE_NAME = "Functions Service"
 SERVICE_VERSION = "1.0.0"
 
 @app.route('/health')
 def health():
-    """健康检查端点"""
+    """Health check endpoint"""
     return jsonify({
         "status": "healthy",
         "service": SERVICE_NAME,
@@ -19,13 +19,13 @@ def health():
 @app.route('/functions', methods=['GET', 'POST'])
 def functions():
     """
-    Functions 端点
-    从 X-Project-ID header 中获取项目 ID 并返回
+    Functions endpoint
+    Extracts the project ID from the X-Project-ID header and returns it
     """
-    # 从请求头中获取 X-Project-ID
+    # Get X-Project-ID from the request headers
     project_id = request.headers.get('X-Project-ID')
 
-    # 如果没有提供项目 ID
+    # If no project ID was provided
     if not project_id:
         return jsonify({
             "error": "Missing X-Project-ID header",
@@ -36,13 +36,13 @@ def functions():
             }
         }), 400
 
-    # 获取请求方法
+    # Get the request method
     method = request.method
 
-    # 获取查询参数（如果有）
+    # Get query parameters (if any)
     query_params = dict(request.args)
 
-    # 获取请求体（如果有）
+    # Get the request body (if any)
     request_data = None
     if method == 'POST':
         try:
@@ -50,7 +50,7 @@ def functions():
         except:
             request_data = None
 
-    # 构建响应
+    # Build the response
     response = {
         "service": SERVICE_NAME,
         "message": "Functions endpoint accessed successfully",
@@ -60,11 +60,11 @@ def functions():
         "timestamp": str(__import__('datetime').datetime.utcnow()),
     }
 
-    # 如果有查询参数，添加到响应
+    # If there are query parameters, add them to the response
     if query_params:
         response["query_params"] = query_params
 
-    # 如果有请求体，添加到响应
+    # If there is a request body, add it to the response
     if request_data:
         response["request_data"] = request_data
 
@@ -73,26 +73,26 @@ def functions():
 @app.route('/functions/<path:subpath>', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def functions_subpath(subpath):
     """
-    Functions 子路径端点
-    支持所有 HTTP 方法，返回项目 ID 和路径信息
+    Functions subpath endpoint
+    Supports all HTTP methods, returns the project ID and path information
     """
-    # 从请求头中获取 X-Project-ID
+    # Get X-Project-ID from the request headers
     project_id = request.headers.get('X-Project-ID')
 
-    # 如果没有提供项目 ID
+    # If no project ID was provided
     if not project_id:
         return jsonify({
             "error": "Missing X-Project-ID header",
             "message": "Please provide X-Project-ID in request headers"
         }), 400
 
-    # 获取请求方法
+    # Get the request method
     method = request.method
 
-    # 获取查询参数（如果有）
+    # Get query parameters (if any)
     query_params = dict(request.args)
 
-    # 获取请求体（如果有）
+    # Get the request body (if any)
     request_data = None
     if method in ['POST', 'PUT', 'PATCH']:
         try:
@@ -100,7 +100,7 @@ def functions_subpath(subpath):
         except:
             request_data = None
 
-    # 构建响应
+    # Build the response
     response = {
         "service": SERVICE_NAME,
         "message": f"Functions subpath accessed: /{subpath}",
@@ -111,11 +111,11 @@ def functions_subpath(subpath):
         "timestamp": str(__import__('datetime').datetime.utcnow()),
     }
 
-    # 如果有查询参数，添加到响应
+    # If there are query parameters, add them to the response
     if query_params:
         response["query_params"] = query_params
 
-    # 如果有请求体，添加到响应
+    # If there is a request body, add it to the response
     if request_data:
         response["request_data"] = request_data
 
@@ -123,7 +123,7 @@ def functions_subpath(subpath):
 
 @app.route('/')
 def index():
-    """API 文档"""
+    """API documentation"""
     return jsonify({
         "service": SERVICE_NAME,
         "version": SERVICE_VERSION,

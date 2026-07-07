@@ -18,7 +18,7 @@ local DynamicLambdaRouterHandler = {
   VERSION = "2.0.0",
 }
 
--- Redis 连接配置（从环境变量读取）
+-- Redis connection configuration (read from environment variables)
 local REDIS_HOST = os.getenv("KONG_REDIS_HOST")
 local REDIS_PORT = tonumber(os.getenv("KONG_REDIS_PORT")) or 6379
 local REDIS_PASSWORD = os.getenv("KONG_REDIS_PASSWORD")
@@ -191,7 +191,7 @@ if REDIS_SSL then
   _redis_sock_opts.server_name = REDIS_HOST
 end
 
--- Redis 连接管理
+-- Redis connection management
 local function get_redis_connection()
   if not REDIS_HOST then
     return nil, "KONG_REDIS_HOST not configured"
@@ -481,10 +481,10 @@ local function get_project_config(conf, project_id)
 end
 
 function DynamicLambdaRouterHandler:access(conf)
-  -- 获取 Project ID from header
+  -- Get the Project ID from header
   local project_id = kong.request.get_header(conf.project_header)
 
-  -- 如果没有 Project ID，跳过此插件
+  -- If there is no Project ID, skip this plugin
   if not project_id then
     kong.log.debug("No ", conf.project_header, " header found, skipping dynamic routing")
     return
@@ -517,7 +517,7 @@ function DynamicLambdaRouterHandler:access(conf)
     })
   end
 
-  -- 获取请求信息
+  -- Get request information
   local request_path = kong.request.get_path()
   local request_query = kong.request.get_raw_query()
   local request_method = kong.request.get_method()
@@ -528,7 +528,7 @@ function DynamicLambdaRouterHandler:access(conf)
   kong.log.debug("[route] Request query: '", request_query or "none", "'")
   kong.log.debug("[route] Request method: ", request_method)
 
-  -- Kong的strip_path在access阶段可能还没生效，手动去除 /rest/v1/ 前缀
+  -- Kong's strip_path may not have taken effect yet during the access phase, so manually strip the /rest/v1/ prefix
   local target_path = request_path
 
   if string.sub(target_path, 1, 9) == "/rest/v1/" then
@@ -539,7 +539,7 @@ function DynamicLambdaRouterHandler:access(conf)
     kong.log.debug("[route] Stripped /rest/v1 to root: '", target_path, "'")
   end
 
-  -- 确保路径以/开头
+  -- Ensure the path starts with /
   if target_path == "" or target_path == nil then
     target_path = "/"
   elseif string.sub(target_path, 1, 1) ~= "/" then
@@ -548,13 +548,13 @@ function DynamicLambdaRouterHandler:access(conf)
 
   kong.log.debug("[route] Final target path for Lambda: '", target_path, "'")
 
-  -- 移除 function_url 尾部斜杠避免双斜杠
+  -- Remove the trailing slash from function_url to avoid a double slash
   local base_url = function_url
   if string.sub(base_url, -1) == "/" then
     base_url = string.sub(base_url, 1, -2)
   end
 
-  -- 构建完整 URL
+  -- Build the full URL
   local target_url = base_url .. target_path
   if request_query and request_query ~= "" then
     target_url = target_url .. "?" .. request_query
@@ -562,7 +562,7 @@ function DynamicLambdaRouterHandler:access(conf)
 
   kong.log.debug("Calling Lambda Function URL: ", function_url, " with path: ", target_path)
 
-  -- 获取 AWS 凭证
+  -- Get AWS credentials
   local aws_instance = initialize_aws()
   local credentials = aws_instance.config.credentials
 
@@ -577,7 +577,7 @@ function DynamicLambdaRouterHandler:access(conf)
     return kong.response.exit(500, { message = "Failed to fetch AWS credentials from Task Role" })
   end
 
-  -- 读取凭证（驼峰命名）
+  -- Read credentials (camelCase field names)
   local access_key = credentials.accessKeyId
   local secret_key = credentials.secretAccessKey
   local session_token = credentials.sessionToken
@@ -587,7 +587,7 @@ function DynamicLambdaRouterHandler:access(conf)
     return kong.response.exit(500, { message = "AWS credentials incomplete" })
   end
 
-  -- 准备 SigV4 签名参数
+  -- Prepare SigV4 signing parameters
   local region = conf.aws_region or "us-east-1"
   local service = "lambda"
   local algorithm = "AWS4-HMAC-SHA256"
@@ -595,7 +595,7 @@ function DynamicLambdaRouterHandler:access(conf)
   local date_stamp = get_date_stamp()
   local credential_scope = date_stamp .. "/" .. region .. "/" .. service .. "/aws4_request"
 
-  -- 解析 Function URL 的 host
+  -- Parse the host from the Function URL
   local function_url_host = function_url:match("https?://([^/]+)")
   if not function_url_host then
     kong.log.err("Failed to parse Function URL host from: ", function_url)
@@ -605,7 +605,7 @@ function DynamicLambdaRouterHandler:access(conf)
   -- Hash payload
   local payload_hash = sha256_hex(request_body or "")
 
-  -- 准备签名的 headers
+  -- Prepare the headers to be signed
   local headers_to_sign = {
     host = function_url_host,
     ["x-amz-date"] = timestamp,
@@ -616,7 +616,7 @@ function DynamicLambdaRouterHandler:access(conf)
     headers_to_sign["x-amz-security-token"] = session_token
   end
 
-  -- 创建 canonical request
+  -- Create the canonical request
   local canonical_request, signed_headers = create_canonical_request(
     request_method,
     target_path,
@@ -625,7 +625,7 @@ function DynamicLambdaRouterHandler:access(conf)
     payload_hash
   )
 
-  -- 创建 string to sign
+  -- Create the string to sign
   local canonical_request_hash = sha256_hex(canonical_request)
   local string_to_sign = concat({
     algorithm,
@@ -634,11 +634,11 @@ function DynamicLambdaRouterHandler:access(conf)
     canonical_request_hash
   }, "\n")
 
-  -- 计算签名
+  -- Compute the signature
   local signing_key = get_signature_key(secret_key, date_stamp, region, service)
   local signature = str.to_hex(hmac_sha256(signing_key, string_to_sign))
 
-  -- 创建 Authorization header
+  -- Create the Authorization header
   local authorization_header = fmt(
     "%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
     algorithm,
@@ -648,8 +648,8 @@ function DynamicLambdaRouterHandler:access(conf)
     signature
   )
 
-  -- 转发客户端所有 headers，然后覆盖 SigV4 相关的
-  -- 这样 Prefer、Accept、Range 等 header 都能传递到 PostgREST
+  -- Forward all of the client's headers, then override the SigV4-related ones
+  -- This way headers like Prefer, Accept, Range etc. all get passed through to PostgREST
   local hop_by_hop = {
     ["connection"] = true,
     ["keep-alive"] = true,
@@ -667,7 +667,7 @@ function DynamicLambdaRouterHandler:access(conf)
     if not hop_by_hop[lower_key]
        and lower_key ~= "host"
        and lower_key ~= "authorization" then
-      -- 多值 header（Kong 可能返回 table），取第一个
+      -- Multi-value header (Kong may return a table), take the first one
       if type(v) == "table" then
         proxy_headers[k] = v[1]
       else
@@ -676,7 +676,7 @@ function DynamicLambdaRouterHandler:access(conf)
     end
   end
 
-  -- 覆盖 SigV4 必需的 headers
+  -- Override the headers required by SigV4
   proxy_headers["Authorization"] = authorization_header
   proxy_headers["X-Amz-Date"] = timestamp
   proxy_headers["Host"] = function_url_host
@@ -745,9 +745,9 @@ function DynamicLambdaRouterHandler:access(conf)
   local short_jwt = mint_jwt(project_id, role, jwt_secret, extra_claims)
   proxy_headers["X-Client-Authorization"] = "Bearer " .. short_jwt
 
-  -- 发送 HTTP 请求到 Function URL
+  -- Send the HTTP request to the Function URL
   local httpc = http.new()
-  httpc:set_timeout(30000)  -- 30 秒超时
+  httpc:set_timeout(30000)  -- 30 second timeout
 
   local res, http_err = httpc:request_uri(target_url, {
     method = request_method,
@@ -793,11 +793,11 @@ function DynamicLambdaRouterHandler:access(conf)
     end
   end
 
-  -- 添加路由信息
+  -- Add routing information
   kong.response.set_header("X-Routed-To-Project", project_id)
   kong.response.set_header("X-Routed-Via", "function-url")
 
-  -- 直接返回 Function URL 的响应（标准 HTTP 响应，无需解包）
+  -- Return the Function URL's response directly (a standard HTTP response, no unwrapping needed)
   return kong.response.exit(res.status, res.body)
 end
 

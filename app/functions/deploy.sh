@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Supabase Edge Functions 部署脚本
-# 使用官方 edge-runtime 镜像和 EFS 持久化存储
+# Supabase Edge Functions deployment script
+# Uses the official edge-runtime image and EFS persistent storage
 
 REGION="${AWS_REGION:-us-east-1}"
 CLUSTER="${ECS_CLUSTER:-infrastack-cluster}"
@@ -16,7 +16,7 @@ TASK_ROLE="<your-task-role-arn>"
 echo "🚀 Supabase Edge Functions Deployment"
 echo "======================================"
 
-# 创建任务定义
+# Create task definition
 echo "📝 Creating task definition..."
 cat > /tmp/functions-task-def.json << 'EOF'
 {
@@ -68,7 +68,7 @@ cat > /tmp/functions-task-def.json << 'EOF'
 }
 EOF
 
-# 注册任务定义
+# Register task definition
 echo "📦 Registering task definition..."
 REVISION=$(aws ecs register-task-definition \
   --cli-input-json file:///tmp/functions-task-def.json \
@@ -76,7 +76,7 @@ REVISION=$(aws ecs register-task-definition \
 
 echo "✅ Task definition registered: $TASK_FAMILY:$REVISION"
 
-# 更新服务
+# Update service
 echo "🔄 Updating ECS service..."
 aws ecs update-service \
   --cluster $CLUSTER \
@@ -87,11 +87,11 @@ aws ecs update-service \
 
 echo "✅ Service update initiated"
 
-# 等待部署
+# Wait for deployment
 echo "⏳ Waiting for deployment (50 seconds)..."
 sleep 50
 
-# 测试
+# Test
 echo "🧪 Testing deployment..."
 echo ""
 echo "Testing health endpoint:"

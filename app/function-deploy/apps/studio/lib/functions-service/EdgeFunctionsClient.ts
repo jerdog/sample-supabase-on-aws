@@ -20,7 +20,7 @@ import { getFrequencyTracker, FrequencyTracker } from './background-sync/Frequen
 import { getBackgroundSyncService, BackgroundSyncService } from './background-sync/BackgroundSyncService'
 
 /**
- * Whether a failed `deno check` should block a deploy (二期 PDF §6).
+ * Whether a failed `deno check` should block a deploy (PDF Phase 2 §6).
  * Defaults to ON; set EDGE_FUNCTIONS_STRICT_VALIDATION=false to fall back to
  * the legacy "warn-and-ship" behavior (e.g. if the deno binary is unavailable
  * in a given environment and validation produces false negatives).
@@ -493,7 +493,7 @@ export class EdgeFunctionsClient {
       preparation = await denoRuntime.prepareFunction(storage, projectRef, slug)
 
       // Validate TypeScript / syntax via `deno check`. This is the gate that
-      // surfaces user code errors at DEPLOY time (二期 PDF §6) instead of
+      // surfaces user code errors at DEPLOY time (PDF Phase 2 §6) instead of
       // letting broken code reach the runtime where it used to masquerade as
       // a misleading 404 "Function not found".
       const validation = await denoRuntime.validateFunction(preparation)

@@ -25,14 +25,14 @@ export async function executeQuery<T = unknown>({
 }: QueryOptions): Promise<WrappedResult<T[]>> {
   assertSelfHosted()
 
-  // 优先使用传入的 x-connection-encrypted，如果没有才生成默认的
+  // Prefer the incoming x-connection-encrypted header; only generate a default if absent
   const existingConnectionEncrypted = (headers as Record<string, string>)?.['x-connection-encrypted']
   let connectionStringEncrypted: string
 
   if (existingConnectionEncrypted) {
     connectionStringEncrypted = existingConnectionEncrypted
   } else if (ref) {
-    // 从 TM 获取按项目的数据库凭证，失败则抛错
+    // Fetch per-project database credentials from Tenant Manager; throw on failure
     const { getDatabaseCredentials } = await import('lib/api/tenant-manager/projects')
     const credentials = await getDatabaseCredentials(ref)
     if (!credentials) {
@@ -41,7 +41,7 @@ export async function executeQuery<T = unknown>({
     const connStr = `postgresql://${credentials.user}:${credentials.password}@${credentials.host}:${credentials.port}/${credentials.db_name}?sslmode=verify-ca`
     connectionStringEncrypted = encryptString(connStr)
   } else {
-    // 无 ref, 无 header: 使用本地 env (单租户兼容模式)
+    // No ref, no header: use the local env (single-tenant compatibility mode)
     connectionStringEncrypted = encryptString(getConnectionString({ readOnly }))
   }
 

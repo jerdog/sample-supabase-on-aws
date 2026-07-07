@@ -137,7 +137,7 @@ const handleDeploy = async (req: NextApiRequest, res: NextApiResponse, context: 
       })
     }
 
-    // Validate function slug format (支持多级目录)
+    // Validate function slug format (supports multi-level directories)
     if (!/^[a-z0-9][a-z0-9_\/-]*[a-z0-9]$/.test(slug)) {
       return res.status(400).json({
         data: null,
@@ -193,7 +193,7 @@ const handleDeploy = async (req: NextApiRequest, res: NextApiResponse, context: 
     if (!deploymentResult.success) {
       // A failed `deno check` is the user's code being wrong, not a server
       // fault — return 422 with the real compiler errors so the user can fix
-      // it, instead of a generic 500 (二期 PDF §6).
+      // it, instead of a generic 500 (PDF Phase 2 §6).
       const isValidationFailure =
         (deploymentResult.details as Record<string, unknown> | undefined)?.code ===
         'FUNCTION_VALIDATION_FAILED'

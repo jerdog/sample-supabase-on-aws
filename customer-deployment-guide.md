@@ -1,55 +1,55 @@
-# Supabase-on-AWS 部署指南
+# Supabase-on-AWS Deployment Guide
 
-> 本文档为 Claude Code 可直接执行的自动化部署指南。
+> This document is an automated deployment guide that Claude Code can execute directly.
 >
-> 人工操作仅需：提供部署参数、完成 DNS 验证、配置 DNS CNAME 记录。
+> Manual steps are limited to: providing deployment parameters, completing DNS validation, and configuring the DNS CNAME record.
 
 ---
 
-## 部署参数（用户需提供）
+## Deployment Parameters (to be provided by the user)
 
-部署前需确认以下参数：
+Confirm the following parameters before deployment:
 
-| 参数 | 说明 | 示例 |
+| Parameter | Description | Example |
 |------|------|------|
-| `AWS_ACCOUNT_ID` | AWS 账号 ID | `123456789012` |
-| `AWS_REGION` | 部署目标区域 | `us-west-2` |
-| `BASE_DOMAIN` | 域名（需有 DNS 管理权限） | `supabase.example.com` |
-| DNS 服务商 | Cloudflare / Route53 / 其他 | Cloudflare |
+| `AWS_ACCOUNT_ID` | AWS account ID | `123456789012` |
+| `AWS_REGION` | Target deployment region | `us-west-2` |
+| `BASE_DOMAIN` | Domain name (you need DNS management access) | `supabase.example.com` |
+| DNS provider | Cloudflare / Route53 / other | Cloudflare |
 
-## 前置条件
+## Prerequisites
 
-| 工具 | 版本要求 | 用途 |
+| Tool | Version required | Purpose |
 |------|---------|------|
-| AWS CLI | v2+ | AWS 资源管理 |
-| Node.js | v18+ | CDK 编译 |
-| Docker | v20+ | 镜像构建（需 linux/amd64 平台支持） |
-| AWS CDK | v2.100+ | 基础设施部署（`npm install -g aws-cdk` 或通过 npx） |
-| jq | v1.6+ | JSON 处理 |
-| Python | v3.9+ | 运行测试 |
-| pnpm | v10+ | function-deploy 依赖管理 |
+| AWS CLI | v2+ | AWS resource management |
+| Node.js | v18+ | CDK compilation |
+| Docker | v20+ | Image builds (requires linux/amd64 platform support) |
+| AWS CDK | v2.100+ | Infrastructure deployment (`npm install -g aws-cdk` or via npx) |
+| jq | v1.6+ | JSON processing |
+| Python | v3.9+ | Running tests |
+| pnpm | v10+ | function-deploy dependency management |
 
-AWS 账号需具备 `AdministratorAccess` 权限。
+The AWS account must have `AdministratorAccess` permissions.
 
 ---
 
-## 步骤 0：清理 CLAUDE.md 中的硬编码信息（如有）
+## Step 0: Clean up hardcoded information in CLAUDE.md (if any)
 
-**目的**：确保 `CLAUDE.md` 中没有上一个部署环境的硬编码账号、域名、安全组 ID 等。
+**Purpose**: Make sure `CLAUDE.md` doesn't contain hardcoded account IDs, domain names, security group IDs, etc. left over from a previous deployment environment.
 
-检查并替换以下内容为通用占位符：
+Check for and replace the following with generic placeholders:
 - AWS Account ID → `See config.json → project.accountId`
-- 域名 → `See config.json → domain.baseDomain`
+- Domain name → `See config.json → domain.baseDomain`
 - ACM Certificate ARN → `See config.json → infraStack.certificate.arn`
-- 安全组 ID（`sg-xxx`）→ 移除 ID 列，保留名称和规则描述
-- ECR URI 中的硬编码账号 → `<account_id>.dkr.ecr.<region>.amazonaws.com/...`
-- 命令示例中的硬编码域名 → `<baseDomain>` 占位符
+- Security group ID (`sg-xxx`) → remove the ID column, keep the name and rule description
+- Hardcoded account in ECR URI → `<account_id>.dkr.ecr.<region>.amazonaws.com/...`
+- Hardcoded domain names in command examples → `<baseDomain>` placeholder
 
-**验证**：`grep -E '(旧账号ID|旧域名)' CLAUDE.md` 应无匹配。
+**Verify**: `grep -E '(old-account-id|old-domain)' CLAUDE.md` should return no matches.
 
 ---
 
-## 步骤 1：申请 ACM 证书
+## Step 1: Request an ACM certificate
 
 ```bash
 aws acm request-certificate \
@@ -58,113 +58,113 @@ aws acm request-certificate \
   --region ${AWS_REGION}
 ```
 
-记录返回的 `CertificateArn`。
+Record the returned `CertificateArn`.
 
-获取 DNS 验证记录：
+Get the DNS validation record:
 
 ```bash
 aws acm describe-certificate \
-  --certificate-arn <证书ARN> \
+  --certificate-arn <certificate ARN> \
   --region ${AWS_REGION} \
   --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
 ```
 
-**需要用户操作**：在 DNS 服务商添加返回的 CNAME 验证记录，等待证书状态变为 `Issued`。
+**User action required**: add the returned CNAME validation record with your DNS provider, and wait for the certificate status to become `Issued`.
 
-验证：
+Verify:
 
 ```bash
 aws acm describe-certificate \
-  --certificate-arn <证书ARN> \
+  --certificate-arn <certificate ARN> \
   --region ${AWS_REGION} \
   --query 'Certificate.Status' \
   --output text
-# 期望输出: ISSUED
+# Expected output: ISSUED
 ```
 
 ---
 
-## 步骤 2：创建并修改 config.json
+## Step 2: Create and edit config.json
 
-### 2.1 选择环境模板
+### 2.1 Choose an environment template
 
-项目提供两个配置模板，根据目标环境选择：
+The project provides two config templates; choose based on the target environment:
 
 ```bash
-# 测试环境
+# Test environment
 cp config.test.json config.json
 
-# 生产环境
+# Production environment
 cp config.production.json config.json
 ```
 
-### 2.2 测试环境与生产环境配置对比
+### 2.2 Test vs. production configuration comparison
 
-`config.json` 中的 `project.environment` 字段（`test` 或 `production`）驱动基础设施行为差异：
+The `project.environment` field in `config.json` (`test` or `production`) drives differences in infrastructure behavior:
 
-| 配置项 | Test | Production | 说明 |
+| Setting | Test | Production | Description |
 |--------|------|------------|------|
 | **VPC** | | | |
-| `infraStack.vpc.maxAzs` | 2 | 3 | 可用区数量 |
-| `infraStack.vpc.natGateways` | 1 | 2 | NAT 网关（影响跨 AZ 出口冗余） |
-| **RDS（管理库 + Worker 库）** | | | |
-| `rds.serverlessV2MinCapacity` | 0.5 | 1 | 最小 ACU（0.5 = 可暂停） |
-| `rds.serverlessV2MaxCapacity` | 4 | 16 | 最大 ACU |
-| `rds.readers` | 0 | 1 | 只读副本数（0 = 仅 writer） |
-| `workerRds.serverlessV2MinCapacity` | 0.5 | 1 | Worker 库最小 ACU |
-| `workerRds.serverlessV2MaxCapacity` | 4 | 16 | Worker 库最大 ACU |
-| `workerRds.readers` | 0 | 1 | Worker 库只读副本数 |
+| `infraStack.vpc.maxAzs` | 2 | 3 | Number of availability zones |
+| `infraStack.vpc.natGateways` | 1 | 2 | NAT gateways (affects cross-AZ egress redundancy) |
+| **RDS (management DB + Worker DB)** | | | |
+| `rds.serverlessV2MinCapacity` | 0.5 | 1 | Minimum ACU (0.5 = can pause) |
+| `rds.serverlessV2MaxCapacity` | 4 | 16 | Maximum ACU |
+| `rds.readers` | 0 | 1 | Number of read replicas (0 = writer only) |
+| `workerRds.serverlessV2MinCapacity` | 0.5 | 1 | Worker DB minimum ACU |
+| `workerRds.serverlessV2MaxCapacity` | 4 | 16 | Worker DB maximum ACU |
+| `workerRds.readers` | 0 | 1 | Worker DB read replica count |
 | **Redis** | | | |
-| `redis.nodeType` | `cache.t3.micro` | `cache.r6g.large` | 实例规格 |
-| `redis.numCacheClusters` | 1 | 2 | 节点数（2 = 多 AZ 故障转移） |
-| **ECS 服务** | | | |
-| Kong | 512 CPU / 1024 MB / 1 实例 | 2048 CPU / 4096 MB / 2 实例 | 网关层 |
-| Tenant Manager | 512 / 1024 / 1 | 1024 / 2048 / 2 | 项目管理 |
-| Studio | 512 / 1024 / 1 | 1024 / 2048 / 2 | 管理界面 |
+| `redis.nodeType` | `cache.t3.micro` | `cache.r6g.large` | Instance size |
+| `redis.numCacheClusters` | 1 | 2 | Node count (2 = multi-AZ failover) |
+| **ECS services** | | | |
+| Kong | 512 CPU / 1024 MB / 1 instance | 2048 CPU / 4096 MB / 2 instances | Gateway layer |
+| Tenant Manager | 512 / 1024 / 1 | 1024 / 2048 / 2 | Project management |
+| Studio | 512 / 1024 / 1 | 1024 / 2048 / 2 | Admin UI |
 | Functions | 512 / 1024 / 1 | 1024 / 2048 / 2 | Edge Functions |
-| Function Deploy | 256 / 512 / 1 | 512 / 1024 / 2 | 函数部署 |
-| Postgres Meta | 256 / 512 / 1 | 512 / 1024 / 2 | 数据库元数据 |
-| Auth | 256 / 512 / 1 | 512 / 1024 / 2 | 认证服务 |
-| **数据保护** | | | |
-| RDS deletionProtection | `false` | `true` | 删除保护 |
-| RDS removalPolicy | `DESTROY` | `RETAIN` | CDK 删除策略 |
-| 备份保留 | 7 天 | 30 天 | 自动备份 |
+| Function Deploy | 256 / 512 / 1 | 512 / 1024 / 2 | Function deployment |
+| Postgres Meta | 256 / 512 / 1 | 512 / 1024 / 2 | Database metadata |
+| Auth | 256 / 512 / 1 | 512 / 1024 / 2 | Auth service |
+| **Data protection** | | | |
+| RDS deletionProtection | `false` | `true` | Deletion protection |
+| RDS removalPolicy | `DESTROY` | `RETAIN` | CDK removal policy |
+| Backup retention | 7 days | 30 days | Automated backups |
 
-**预估月度成本**（us-east-1 参考）：
+**Estimated monthly cost** (us-east-1 reference):
 
-| 资源 | Test | Production |
+| Resource | Test | Production |
 |------|------|------------|
-| VPC（NAT Gateway） | ~$35 | ~$70 |
-| RDS（管理库 + Worker） | ~$90 | ~$450 |
+| VPC (NAT Gateway) | ~$35 | ~$70 |
+| RDS (management + worker) | ~$90 | ~$450 |
 | Redis | ~$15 | ~$300 |
-| ECS Fargate（7 服务） | ~$120 | ~$600 |
+| ECS Fargate (7 services) | ~$120 | ~$600 |
 | ALB x 2 | ~$40 | ~$40 |
-| **合计** | **~$300/月** | **~$1,460/月** |
+| **Total** | **~$300/month** | **~$1,460/month** |
 
-### 2.3 填入部署参数
+### 2.3 Fill in the deployment parameters
 
-编辑 `config.json`，替换占位符：
+Edit `config.json`, replacing the placeholders:
 
-| 字段 | 修改为 |
+| Field | Set to |
 |------|--------|
 | `project.region` | `${AWS_REGION}` |
 | `project.accountId` | `${AWS_ACCOUNT_ID}` |
-| `infraStack.certificate.arn` | 步骤 1 获得的证书 ARN |
+| `infraStack.certificate.arn` | The certificate ARN obtained in Step 1 |
 | `domain.baseDomain` | `${BASE_DOMAIN}` |
-| `tags.DeploymentDate` | 当前日期（如 `2026-02-28`） |
+| `tags.DeploymentDate` | Current date (e.g. `2026-02-28`) |
 
-ECR 仓库地址由 `accountId` + `region` 在构建脚本中自动拼接，无需手动配置。
+The ECR repository address is automatically assembled from `accountId` + `region` in the build script, so no manual configuration is needed.
 
-### 2.4 切换环境
+### 2.4 Switching environments
 
-如需从测试环境切换到生产环境（或反之）：
+To switch from test to production (or vice versa):
 
 ```bash
-# 1. 备份当前配置
+# 1. Back up the current config
 cp config.json config.$(jq -r '.project.environment' config.json).bak.json
 
-# 2. 切换模板（保留自己的 accountId、region、certificate、domain）
-TARGET=production  # 或 test
+# 2. Switch templates (keep your own accountId, region, certificate, domain)
+TARGET=production  # or test
 jq -s '.[0] * {
   project: {region: .[1].project.region, accountId: .[1].project.accountId, name: .[1].project.name},
   infraStack: {certificate: .[1].infraStack.certificate},
@@ -172,18 +172,18 @@ jq -s '.[0] * {
 }' config.${TARGET}.json config.json > config.new.json
 mv config.new.json config.json
 
-# 3. 重新部署
+# 3. Redeploy
 cd infra && npm run build && npx cdk deploy SupabaseStack --require-approval never
 
-# 4. 强制 ECS 重新部署（资源规格变更需重启任务）
+# 4. Force ECS to redeploy (a resource spec change requires restarting the tasks)
 for svc in kong-gateway tenant-manager studio functions-service postgres-meta function-deploy auth-service; do
   aws ecs update-service --cluster infrastack-cluster --service "$svc" --force-new-deployment --region ${AWS_REGION}
 done
 ```
 
-> **注意**：从 test 切换到 production 是**非破坏性**升级（增加副本、扩大容量）。从 production 切换到 test 会**缩减副本**并降低保护级别，请确保已备份数据。
+> **Note**: Switching from test to production is a **non-destructive** upgrade (adds replicas, increases capacity). Switching from production to test will **reduce replicas** and lower the protection level, so make sure you've backed up your data first.
 
-**验证**：
+**Verify**:
 
 ```bash
 jq '{env: .project.environment, region: .project.region, accountId: .project.accountId, certArn: .infraStack.certificate.arn, baseDomain: .domain.baseDomain}' config.json
@@ -191,34 +191,34 @@ jq '{env: .project.environment, region: .project.region, accountId: .project.acc
 
 ---
 
-## 步骤 3：CDK Bootstrap（仅首次部署）
+## Step 3: CDK Bootstrap (first deployment only)
 
 ```bash
 cd infra && npm install
 npx cdk bootstrap aws://${AWS_ACCOUNT_ID}/${AWS_REGION}
 ```
 
-**验证**：输出包含 `Environment aws://.../... bootstrapped`。
+**Verify**: the output includes `Environment aws://.../... bootstrapped`.
 
 ---
 
-## 步骤 4：构建并推送 Docker 镜像
+## Step 4: Build and push Docker images
 
-### 4.1 预处理：生成缺失的 lockfile
+### 4.1 Preprocessing: generate missing lockfiles
 
-构建脚本要求每个服务目录有完整的依赖 lockfile。以下两个服务需要预先生成：
+The build script requires a complete dependency lockfile in each service directory. The following two services need one generated ahead of time:
 
-**tenant-manager**（需要 `package-lock.json`）：
+**tenant-manager** (needs `package-lock.json`):
 
 ```bash
 cd app/tenant-manager
-# 如果 npm install 报 arborist 错误，先清理缓存
+# If npm install reports an arborist error, clear the cache first
 rm -rf node_modules /home/$USER/.npm/_cacache
 npm install
 cd ../..
 ```
 
-**function-deploy**（需要 `pnpm-lock.yaml`）：
+**function-deploy** (needs `pnpm-lock.yaml`):
 
 ```bash
 cd app/function-deploy
@@ -226,39 +226,39 @@ pnpm install --lockfile-only
 cd ../..
 ```
 
-> **已知问题**：npm 10.x 在某些环境下会出现 `Cannot read properties of null (reading 'matches')` 错误，通过删除 `~/.npm/_cacache` 可解决。
+> **Known issue**: npm 10.x can throw a `Cannot read properties of null (reading 'matches')` error in some environments; deleting `~/.npm/_cacache` resolves it.
 
-### 4.2 构建全部服务
+### 4.2 Build all services
 
 ```bash
 ./build-and-push.sh
 ```
 
-构建 7 个服务：functions、kong、postgrest-lambda、tenant-manager、postgres-meta、studio、function-deploy。
+This builds 7 services: functions, kong, postgrest-lambda, tenant-manager, postgres-meta, studio, function-deploy.
 
-脚本会自动：
-- 登录 ECR（私有 + 公共）
-- 创建不存在的 ECR 仓库（含生命周期策略：保留 10 个最新镜像）
-- 构建 linux/amd64 镜像
-- 推送 `latest` 和 `git-sha` 两个标签
+The script automatically:
+- Logs in to ECR (private + public)
+- Creates any ECR repositories that don't exist yet (with a lifecycle policy: keep the 10 most recent images)
+- Builds linux/amd64 images
+- Pushes both the `latest` and `git-sha` tags
 
-如果某个服务构建失败，可单独重建：
+If a particular service fails to build, you can rebuild it individually:
 
 ```bash
-./build-and-push.sh <服务名>
-# 可用服务名: functions | kong | postgrest-lambda | tenant-manager | postgres-meta | studio | function-deploy
+./build-and-push.sh <service-name>
+# Available service names: functions | kong | postgrest-lambda | tenant-manager | postgres-meta | studio | function-deploy
 ```
 
-**验证**：
+**Verify**:
 
 ```bash
 aws ecr describe-repositories --region ${AWS_REGION} --query 'repositories[*].repositoryName' --output json
-# 期望包含: functions-service, kong-configured, postgrest-lambda, tenant-manager, postgres-meta, studio, function-deploy
+# Expected to include: functions-service, kong-configured, postgrest-lambda, tenant-manager, postgres-meta, studio, function-deploy
 ```
 
 ---
 
-## 步骤 5：部署基础设施
+## Step 5: Deploy the infrastructure
 
 ```bash
 cd infra
@@ -266,22 +266,22 @@ npm run build
 npx cdk deploy SupabaseStack --require-approval never
 ```
 
-预计创建约 **159 个 AWS 资源**，耗时 **10-15 分钟**。
+Expect roughly **159 AWS resources** to be created, taking **10-15 minutes**.
 
-创建的主要资源：
-- VPC（2 AZ、1 NAT Gateway）
-- Aurora Serverless v2 × 2（管理集群 + Worker 集群）
-- ECS Fargate 服务 × 7（Kong、Tenant Manager、Studio、Functions、Function Deploy、Postgres Meta、Project Service）
-- ALB × 2（Kong ALB + Studio ALB）
-- ElastiCache Redis（AUTH + TLS）
-- EFS（Functions 存储）
+Main resources created:
+- VPC (2 AZs, 1 NAT Gateway)
+- Aurora Serverless v2 × 2 (management cluster + worker cluster)
+- ECS Fargate services × 7 (Kong, Tenant Manager, Studio, Functions, Function Deploy, Postgres Meta, Project Service)
+- ALB × 2 (Kong ALB + Studio ALB)
+- ElastiCache Redis (AUTH + TLS)
+- EFS (Functions storage)
 - WAF WebACL
-- CloudWatch 告警
-- Cloud Map 服务发现
+- CloudWatch alarms
+- Cloud Map service discovery
 
-### 5.1 设置 ECR Lambda 拉取权限
+### 5.1 Set the ECR Lambda pull permission
 
-CDK 部署完成后，需要给 `postgrest-lambda` ECR 仓库添加 Lambda 拉取权限，否则创建项目时 Lambda 无法拉取镜像：
+After the CDK deployment finishes, you need to add a Lambda pull permission to the `postgrest-lambda` ECR repository; otherwise Lambda won't be able to pull the image when creating a project:
 
 ```bash
 aws ecr set-repository-policy \
@@ -303,9 +303,9 @@ aws ecr set-repository-policy \
   }'
 ```
 
-> **已知问题**：CDK 创建的 Lambda 执行角色有 ECR 权限，但 ECR 仓库策略默认不允许 Lambda 服务拉取。不设置此策略会导致创建项目时报错 `Lambda does not have permission to access the ECR image`。
+> **Known issue**: the Lambda execution role created by CDK has ECR permissions, but the ECR repository policy does not allow the Lambda service to pull by default. Skipping this step causes a `Lambda does not have permission to access the ECR image` error when creating a project.
 
-### 5.2 记录部署输出
+### 5.2 Record the deployment outputs
 
 ```bash
 aws cloudformation describe-stacks \
@@ -314,77 +314,77 @@ aws cloudformation describe-stacks \
   --output table
 ```
 
-关键输出值：
+Key output values:
 
-| 输出键 | 用途 |
+| Output key | Purpose |
 |--------|------|
-| `ALBDnsName` | Kong ALB DNS，DNS CNAME 目标 |
+| `ALBDnsName` | Kong ALB DNS, the DNS CNAME target |
 | `StudioALBDnsName` | Studio ALB DNS |
-| `RdsEndpoint` | 管理数据库端点 |
-| `WorkerRdsEndpoint` | Worker 数据库端点 |
-| `RedisEndpoint` | Redis 端点 |
-| `LambdaExecutionRoleArn` | Lambda 执行角色 |
-| `LambdaSgId` | Lambda 安全组 |
+| `RdsEndpoint` | Management database endpoint |
+| `WorkerRdsEndpoint` | Worker database endpoint |
+| `RedisEndpoint` | Redis endpoint |
+| `LambdaExecutionRoleArn` | Lambda execution role |
+| `LambdaSgId` | Lambda security group |
 
 ---
 
-## 步骤 6：配置 DNS
+## Step 6: Configure DNS
 
-**需要用户操作**：在 DNS 服务商添加通配符 CNAME 记录。
+**User action required**: add a wildcard CNAME record with your DNS provider.
 
-| 记录名 | 类型 | 值 | 注意 |
+| Record name | Type | Value | Note |
 |--------|------|---|------|
-| `*.${BASE_DOMAIN}` | CNAME | `<ALBDnsName 输出值>` | 关闭 CDN 代理（如 Cloudflare 灰云模式） |
+| `*.${BASE_DOMAIN}` | CNAME | `<ALBDnsName output value>` | Turn off CDN proxying (e.g. Cloudflare's grey-cloud mode) |
 
-> **Cloudflare 用户注意**：
-> - 记录名称填写 `*`（在 `${BASE_DOMAIN}` 域下），Cloudflare 会自动追加域名后缀
-> - **必须关闭代理**（DNS only / 灰云），否则 ACM 证书的 SNI 匹配会失败
-> - 如果域名是多级子域（如 `supabase.example.com`），记录名称应填 `*.supabase`（在 `example.com` 域下）
+> **Note for Cloudflare users**:
+> - Enter `*` as the record name (under the `${BASE_DOMAIN}` zone); Cloudflare will automatically append the domain suffix
+> - **Proxying must be turned off** (DNS only / grey cloud), otherwise the ACM certificate's SNI matching will fail
+> - If the domain is a multi-level subdomain (e.g. `supabase.example.com`), the record name should be `*.supabase` (under the `example.com` zone)
 
-**验证**：
+**Verify**:
 
 ```bash
 nslookup test.${BASE_DOMAIN} 1.1.1.1
-# 期望输出: canonical name = <ALBDnsName>，解析到 ALB IP
+# Expected output: canonical name = <ALBDnsName>, resolving to the ALB's IP
 ```
 
 ---
 
-## 步骤 7：注册 Worker 数据库并创建首个项目
+## Step 7: Register the worker database and create the first project
 
 ```bash
 ./scripts/provision-worker-and-create-project.sh
 ```
 
-脚本自动完成：
-1. 从 CloudFormation 输出获取 Worker RDS 端点和密码
-2. 从 Secrets Manager 获取 Admin API Key
-3. 向 Tenant Manager 注册 Worker RDS 实例
-4. 创建测试项目（初始化数据库 schema、创建 PostgREST Lambda、注册 Kong 消费者、生成 API 密钥）
+The script automatically:
+1. Retrieves the worker RDS endpoint and password from the CloudFormation outputs
+2. Retrieves the Admin API key from Secrets Manager
+3. Registers the worker RDS instance with Tenant Manager
+4. Creates a test project (initializes the database schema, creates the PostgREST Lambda, registers a Kong consumer, generates API keys)
 
-成功输出示例：
+Example success output:
 ```
   Worker RDS:     supabase-worker-cluster.cluster-xxx.us-west-2.rds.amazonaws.com
   Instance ID:    supabase-worker-01
   Project Ref:    fd03vkjr73dptzl8bihy
 ```
 
-**验证**：
+**Verify**:
 
 ```bash
-# 获取 Studio ALB
+# Get the Studio ALB
 STUDIO_ALB=$(aws cloudformation describe-stacks \
   --stack-name SupabaseStack --region ${AWS_REGION} \
   --query 'Stacks[0].Outputs[?OutputKey==`StudioALBDnsName`].OutputValue' \
   --output text)
 
-# 列出项目
+# List projects
 curl -sk "https://${STUDIO_ALB}/api/v1/projects" | jq '.[].ref'
 ```
 
 ---
 
-## 步骤 8：运行自动化测试
+## Step 8: Run the automated tests
 
 ```bash
 cd tests
@@ -392,53 +392,53 @@ pip install -r requirements.txt
 ./RUN_TESTS.sh
 ```
 
-期望结果：**34 passed, 3 skipped**。
+Expected result: **34 passed, 3 skipped**.
 
-测试覆盖：
+Test coverage:
 
-| 组 | 测试数 | 内容 |
+| Group | Test count | Content |
 |----|--------|------|
-| A: 项目创建 | 2 | 通过 Studio API 创建项目 |
-| B: API 密钥 | 2 | 获取并验证 opaque 格式密钥 |
-| C: SQL CRUD | 8 | 通过 Studio SQL 端点增删改查 |
-| D: 元数据 | 2 | 9 个元数据端点（tables、views、extensions 等） |
-| E: Secrets | 3（跳过） | Secrets 管理（未实现） |
-| F: 表 CRUD | 8 | DDL + DML 完整生命周期 |
-| G: SDK CRUD + RLS | 8 | Supabase SDK 操作 + 行级安全验证 |
-| H: 无效密钥 | 4 | 随机密钥、伪造密钥、空密钥、无密钥均返回 401 |
+| A: Project creation | 2 | Create a project via the Studio API |
+| B: API keys | 2 | Fetch and validate opaque-format keys |
+| C: SQL CRUD | 8 | Create/read/update/delete via the Studio SQL endpoint |
+| D: Metadata | 2 | 9 metadata endpoints (tables, views, extensions, etc.) |
+| E: Secrets | 3 (skipped) | Secrets management (not implemented) |
+| F: Table CRUD | 8 | Full DDL + DML lifecycle |
+| G: SDK CRUD + RLS | 8 | Supabase SDK operations + row-level security validation |
+| H: Invalid keys | 4 | Random key, forged key, empty key, and no key all return 401 |
 
 ---
 
-## 部署验证清单
+## Deployment verification checklist
 
-全部步骤完成后，逐项确认：
+Once all steps are complete, confirm each item:
 
-- [ ] 所有 ECS 服务 `runningCount == desiredCount`
+- [ ] All ECS services show `runningCount == desiredCount`
   ```bash
   aws ecs describe-services --cluster infrastack-cluster \
     --services kong-gateway tenant-manager studio functions-service function-deploy postgres-meta \
     --region ${AWS_REGION} \
     --query 'services[*].[serviceName,runningCount,desiredCount]' --output table
   ```
-- [ ] 自动化测试 34 passed, 3 skipped
-- [ ] SDK 端点可访问：`https://<project_ref>.${BASE_DOMAIN}/rest/v1/`
+- [ ] Automated tests show 34 passed, 3 skipped
+- [ ] The SDK endpoint is reachable: `https://<project_ref>.${BASE_DOMAIN}/rest/v1/`
 
 ---
 
-## 日常运维
+## Day-to-day operations
 
-### 更新服务代码
+### Updating service code
 
 ```bash
-# 1. 构建并推送新镜像
-./build-and-push.sh <服务名>
+# 1. Build and push the new image
+./build-and-push.sh <service-name>
 
-# 2. 强制 ECS 拉取新镜像
+# 2. Force ECS to pull the new image
 aws ecs update-service --cluster infrastack-cluster \
-  --service <ECS服务名> --force-new-deployment --region ${AWS_REGION}
+  --service <ECS-service-name> --force-new-deployment --region ${AWS_REGION}
 ```
 
-| 构建目标 | ECS 服务名 |
+| Build target | ECS service name |
 |---------|-----------|
 | kong | kong-gateway |
 | tenant-manager | tenant-manager |
@@ -447,133 +447,133 @@ aws ecs update-service --cluster infrastack-cluster \
 | function-deploy | function-deploy |
 | postgres-meta | postgres-meta |
 
-### 查看日志
+### Viewing logs
 
 ```bash
 aws logs tail /ecs/supabase --since 10m --region ${AWS_REGION}
 aws logs tail /ecs/supabase --since 5m --filter-pattern "tenant-manager" --region ${AWS_REGION}
 ```
 
-### 更新基础设施
+### Updating the infrastructure
 
 ```bash
 cd infra && npm run build
-npx cdk diff SupabaseStack      # 预览变更
-npx cdk deploy SupabaseStack    # 执行变更
+npx cdk diff SupabaseStack      # Preview the changes
+npx cdk deploy SupabaseStack    # Apply the changes
 ```
 
 ---
 
-## 已知问题与解决方案
+## Known issues and solutions
 
-### 1. tenant-manager 构建失败：缺少 package-lock.json
+### 1. tenant-manager build fails: missing package-lock.json
 
-**现象**：`COPY package.json package-lock.json ./` 报 `/package-lock.json: not found`
+**Symptom**: `COPY package.json package-lock.json ./` reports `/package-lock.json: not found`
 
-**解决**：在 `app/tenant-manager/` 目录执行 `npm install` 生成 lockfile。如遇 npm arborist 错误，先 `rm -rf ~/.npm/_cacache`。
+**Fix**: run `npm install` in the `app/tenant-manager/` directory to generate the lockfile. If you hit an npm arborist error, run `rm -rf ~/.npm/_cacache` first.
 
-### 2. function-deploy 构建失败：缺少 pnpm-lock.yaml
+### 2. function-deploy build fails: missing pnpm-lock.yaml
 
-**现象**：turbo prune 报 `lockfile not found at /app/pnpm-lock.yaml`
+**Symptom**: turbo prune reports `lockfile not found at /app/pnpm-lock.yaml`
 
-**解决**：在 `app/function-deploy/` 目录执行 `pnpm install --lockfile-only`。
+**Fix**: run `pnpm install --lockfile-only` in the `app/function-deploy/` directory.
 
-### 3. 创建项目报 ECR 权限错误
+### 3. Creating a project reports an ECR permission error
 
-**现象**：`Lambda does not have permission to access the ECR image`
+**Symptom**: `Lambda does not have permission to access the ECR image`
 
-**解决**：执行步骤 5.1 的 `aws ecr set-repository-policy` 命令。
+**Fix**: run the `aws ecr set-repository-policy` command from step 5.1.
 
-### 4. DNS 不生效（NXDOMAIN）
+### 4. DNS isn't resolving (NXDOMAIN)
 
-**现象**：`nslookup test.${BASE_DOMAIN}` 返回 NXDOMAIN
+**Symptom**: `nslookup test.${BASE_DOMAIN}` returns NXDOMAIN
 
-**排查**：
-- Cloudflare 记录名称是否正确（多级子域需拆分，如 `*.supabase` 在 `example.com` 域下）
-- 是否使用了完整域名导致重复追加后缀
-- DNS 传播可能需要几分钟
+**Troubleshooting**:
+- Check whether the Cloudflare record name is correct (multi-level subdomains need to be split, e.g. `*.supabase` under the `example.com` zone)
+- Check whether you used the fully qualified domain name, causing the suffix to be appended twice
+- DNS propagation can take a few minutes
 
-### 5. Kong 返回 401 Unauthorized
+### 5. Kong returns 401 Unauthorized
 
-**排查**：
-1. 确认使用 opaque 密钥（`sb_publishable_*` / `sb_secret_*`），而非 JWT
-2. 请求需同时设置 `apikey` 和 `Authorization: Bearer` 两个 Header
-3. 重新获取密钥：`curl -sk "https://${STUDIO_ALB}/api/v1/projects/${REF}/api-keys" | jq .`
+**Troubleshooting**:
+1. Confirm you're using an opaque key (`sb_publishable_*` / `sb_secret_*`), not a JWT
+2. The request must set both the `apikey` and `Authorization: Bearer` headers
+3. Re-fetch the key: `curl -sk "https://${STUDIO_ALB}/api/v1/projects/${REF}/api-keys" | jq .`
 
-### 6. 创建项目超时
+### 6. Creating a project times out
 
-**说明**：首次创建项目需 2-3 分钟（Lambda VPC ENI 冷启动），Studio ALB 空闲超时已设为 400 秒，通常不会超时。如超时，检查 Tenant Manager 日志。
+**Note**: the first project creation takes 2-3 minutes (Lambda VPC ENI cold start); the Studio ALB idle timeout is set to 400 seconds, so it usually doesn't time out. If it does, check the Tenant Manager logs.
 
 ---
 
-## 架构参考
+## Architecture reference
 
-### 请求流程（Gateway JWT Minting）
+### Request flow (Gateway JWT minting)
 
 ```
-客户端（Supabase SDK）
+Client (Supabase SDK)
   │  apikey: sb_publishable_xxx
   │  Authorization: Bearer sb_publishable_xxx
   ▼
 Kong ALB (*.baseDomain:443)
   ▼
-Kong Gateway（ECS Fargate）
-  ├─ pre-function：子域名 → X-Project-ID
-  ├─ key-auth：验证 opaque API 密钥 → 识别消费者/角色
-  ├─ dynamic-lambda-router：
-  │    1. Redis 缓存查询（jwt_secret + lambda_url）
-  │    2. 缓存未命中 → GET tenant-manager /project/{id}/config
-  │    3. 铸造短效 JWT（5分钟，HS256，role=anon|service_role）
-  │    4. SigV4 签名 → POST Lambda Function URL
+Kong Gateway (ECS Fargate)
+  ├─ pre-function: subdomain → X-Project-ID
+  ├─ key-auth: validates the opaque API key → identifies the consumer/role
+  ├─ dynamic-lambda-router:
+  │    1. Redis cache lookup (jwt_secret + lambda_url)
+  │    2. Cache miss → GET tenant-manager /project/{id}/config
+  │    3. Mint a short-lived JWT (5 minutes, HS256, role=anon|service_role)
+  │    4. SigV4 signature → POST Lambda Function URL
   ▼
-PostgREST Lambda → 验证 JWT → SET LOCAL role → SQL + RLS
+PostgREST Lambda → validates the JWT → SET LOCAL role → SQL + RLS
   ▼
-Worker Aurora（租户数据库）
+Worker Aurora (tenant database)
 ```
 
-### API 密钥格式
+### API key formats
 
-| 类型 | 格式 | Kong 消费者 | RLS |
+| Type | Format | Kong consumer | RLS |
 |------|------|------------|-----|
-| Anon（公开） | `sb_publishable_{32字符}` | `{ref}--anon` | 受约束 |
-| Service Role（服务端） | `sb_secret_{32字符}` | `{ref}--service_role` | 绕过 |
+| Anon (public) | `sb_publishable_{32 chars}` | `{ref}--anon` | Constrained |
+| Service Role (server-side) | `sb_secret_{32 chars}` | `{ref}--service_role` | Bypassed |
 
-### 安全须知
+### Security notes
 
-- **切勿将 `sb_secret_*` 暴露**在客户端代码或公开仓库中
-- Anon 密钥可安全用于客户端 — 受 RLS 策略约束
-- Kong 铸造的短效 JWT 有效期仅 5 分钟，最大限度减少重放窗口
-- 所有 RDS 连接均使用 SSL 加密
+- **Never expose `sb_secret_*`** in client-side code or public repositories
+- The anon key is safe to use client-side — it's constrained by RLS policies
+- The short-lived JWT minted by Kong is valid for only 5 minutes, minimizing the replay window
+- All RDS connections use SSL encryption
 
 ---
 
-## 快速参考
+## Quick reference
 
 ```bash
-# 构建全部镜像
+# Build all images
 ./build-and-push.sh
 
-# 部署基础设施
+# Deploy the infrastructure
 cd infra && npm run build && npx cdk deploy SupabaseStack --require-approval never
 
-# 初始化首个项目
+# Initialize the first project
 ./scripts/provision-worker-and-create-project.sh
 
-# 运行测试
+# Run the tests
 cd tests && pip install -r requirements.txt && ./RUN_TESTS.sh
 
-# 获取 API 密钥
+# Get API keys
 curl -sk "https://${STUDIO_ALB}/api/v1/projects/${PROJECT_REF}/api-keys" | jq .
 
-# SDK 查询
+# SDK query
 curl -sk -H "apikey: ${KEY}" -H "Authorization: Bearer ${KEY}" \
   "https://${PROJECT_REF}.${DOMAIN}/rest/v1/table?select=*" | jq .
 
-# 查看服务状态
+# Check service status
 aws ecs describe-services --cluster infrastack-cluster \
   --services kong-gateway tenant-manager studio functions-service function-deploy postgres-meta \
   --region ${AWS_REGION} --query 'services[*].[serviceName,runningCount,desiredCount]' --output table
 
-# 查看日志
+# View logs
 aws logs tail /ecs/supabase --since 10m --region ${AWS_REGION}
 ```

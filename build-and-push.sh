@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# 构建并推送应用服务镜像到 ECR
-# 支持的服务: functions, kong, postgrest-lambda, tenant-manager, postgres-meta, studio
+# Build and push application service images to ECR
+# Supported services: functions, kong, postgrest-lambda, tenant-manager, postgres-meta, studio
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 从 config.json 读取配置（单一事实源）
+# Read configuration from config.json (single source of truth)
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "错误: 配置文件不存在: $CONFIG_FILE"
+    echo "Error: config file not found: $CONFIG_FILE"
     exit 1
 fi
 AWS_ACCOUNT_ID=$(jq -r '.project.accountId' "$CONFIG_FILE")
@@ -19,7 +19,7 @@ AWS_REGION="${AWS_REGION:-$(jq -r '.project.region' "$CONFIG_FILE")}"
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 echo "========================================="
-echo "应用服务镜像构建和推送工具"
+echo "Application service image build and push tool"
 echo "========================================="
 echo "AWS Account ID: $AWS_ACCOUNT_ID"
 echo "AWS Region: $AWS_REGION"
@@ -28,10 +28,10 @@ echo "Git SHA: $GIT_SHA"
 echo "========================================="
 echo ""
 
-# 所有可用服务
+# All available services
 ALL_SERVICES="functions kong postgrest-lambda tenant-manager postgres-meta studio function-deploy auth storage"
 
-# 服务配置函数: ECR仓库名|构建上下文目录|Dockerfile路径
+# Service config function: ECR repository name|build context directory|Dockerfile path
 get_service_config() {
     local service="$1"
     case "$service" in
@@ -68,53 +68,53 @@ get_service_config() {
     esac
 }
 
-# 解析命令行参数
+# Parse command-line arguments
 SERVICE_TO_BUILD="$1"
 
-# 确定要构建的服务列表
+# Determine which services to build
 if [ -n "$SERVICE_TO_BUILD" ] && [ "$SERVICE_TO_BUILD" != "all" ]; then
     if [ -z "$(get_service_config "$SERVICE_TO_BUILD")" ]; then
-        echo "错误: 未知的服务 '$SERVICE_TO_BUILD'"
-        echo "可用的服务: $ALL_SERVICES"
+        echo "Error: unknown service '$SERVICE_TO_BUILD'"
+        echo "Available services: $ALL_SERVICES"
         exit 1
     fi
-    echo "只构建服务: $SERVICE_TO_BUILD"
+    echo "Building only service: $SERVICE_TO_BUILD"
     SERVICES_TO_BUILD="$SERVICE_TO_BUILD"
 else
-    echo "构建所有服务"
+    echo "Building all services"
     SERVICES_TO_BUILD="$ALL_SERVICES"
 fi
 echo ""
 
-# 切换到项目根目录（确保相对路径正确）
+# Switch to the project root directory (to ensure relative paths are correct)
 cd "$SCRIPT_DIR"
 
-# ECR 登录（私有）
-echo "登录到私有 ECR..."
+# ECR login (private)
+echo "Logging in to private ECR..."
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-echo "私有 ECR 登录成功"
+echo "Private ECR login succeeded"
 echo ""
 
-# Public ECR 登录（postgrest-lambda 的基础镜像需要）
-echo "登录到 AWS Public ECR..."
+# Public ECR login (required for postgrest-lambda's base image)
+echo "Logging in to AWS Public ECR..."
 aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-echo "Public ECR 登录成功"
+echo "Public ECR login succeeded"
 echo ""
 
-# 处理每个服务
+# Process each service
 for service in $SERVICES_TO_BUILD; do
     echo "========================================="
-    echo "处理服务: $service"
+    echo "Processing service: $service"
     echo "========================================="
 
-    # 获取服务配置
+    # Get the service config
     config=$(get_service_config "$service")
     if [ -z "$config" ]; then
-        echo "警告: 无法获取服务配置"
+        echo "Warning: unable to get service config"
         continue
     fi
 
-    # 解析配置
+    # Parse the config
     repository=$(echo "$config" | cut -d'|' -f1)
     context=$(echo "$config" | cut -d'|' -f2)
     dockerfile=$(echo "$config" | cut -d'|' -f3)
@@ -124,24 +124,24 @@ for service in $SERVICES_TO_BUILD; do
     echo "  Dockerfile: $context/$dockerfile"
     echo ""
 
-    # 检查目录是否存在
+    # Check whether the directory exists
     if [ ! -d "$context" ]; then
-        echo "警告: 目录不存在: $context，跳过此服务"
+        echo "Warning: directory not found: $context, skipping this service"
         echo ""
         continue
     fi
 
-    # 检查 Dockerfile 是否存在
+    # Check whether the Dockerfile exists
     if [ ! -f "$context/$dockerfile" ]; then
-        echo "警告: Dockerfile 不存在: $context/$dockerfile，跳过此服务"
+        echo "Warning: Dockerfile not found: $context/$dockerfile, skipping this service"
         echo ""
         continue
     fi
 
-    # 检查 ECR 仓库是否存在
-    echo "检查 ECR 仓库..."
+    # Check whether the ECR repository exists
+    echo "Checking ECR repository..."
     if ! aws ecr describe-repositories --repository-names "$repository" --region "$AWS_REGION" &> /dev/null; then
-        echo "仓库不存在，创建新仓库: $repository"
+        echo "Repository does not exist, creating new repository: $repository"
         repo_uri=$(aws ecr create-repository \
             --repository-name "$repository" \
             --region "$AWS_REGION" \
@@ -149,10 +149,10 @@ for service in $SERVICES_TO_BUILD; do
             --query 'repository.repositoryUri' \
             --output text)
 
-        echo "  仓库 URI: $repo_uri"
+        echo "  Repository URI: $repo_uri"
 
-        # 设置生命周期策略
-        echo "  设置生命周期策略: 保留 10 个最新镜像"
+        # Set the lifecycle policy
+        echo "  Setting lifecycle policy: keep the 10 most recent images"
         aws ecr put-lifecycle-policy \
             --repository-name "$repository" \
             --region "$AWS_REGION" \
@@ -171,7 +171,7 @@ for service in $SERVICES_TO_BUILD; do
                 }]
             }' > /dev/null
     else
-        echo "仓库已存在: $repository"
+        echo "Repository already exists: $repository"
         repo_uri=$(aws ecr describe-repositories \
             --repository-names "$repository" \
             --region "$AWS_REGION" \
@@ -180,9 +180,9 @@ for service in $SERVICES_TO_BUILD; do
     fi
     echo ""
 
-    # 构建镜像
+    # Build the image
     image_uri="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$repository:latest"
-    echo "构建镜像 (linux/amd64)..."
+    echo "Building image (linux/amd64)..."
     echo "  Image URI: $image_uri"
     echo "  Building from: $context"
     echo ""
@@ -190,35 +190,35 @@ for service in $SERVICES_TO_BUILD; do
     # Copy RDS CA certificate to build context (required for SSL verification)
     CERT_FILE="$SCRIPT_DIR/certs/global-bundle.pem"
     if [ ! -f "$CERT_FILE" ]; then
-        echo "错误: RDS CA 证书不存在: $CERT_FILE"
-        echo "请下载: curl -o certs/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem"
+        echo "Error: RDS CA certificate not found: $CERT_FILE"
+        echo "Please download it: curl -o certs/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem"
         exit 1
     fi
     mkdir -p "$context/certs"
     cp "$CERT_FILE" "$context/certs/global-bundle.pem"
 
     if docker build --platform linux/amd64 -t "$repository:latest" -f "$context/$dockerfile" "$context"; then
-        echo "镜像构建成功"
+        echo "Image build succeeded"
     else
-        echo "镜像构建失败"
+        echo "Image build failed"
         exit 1
     fi
     echo ""
 
-    # 标记镜像
-    echo "标记镜像..."
+    # Tag the image
+    echo "Tagging image..."
     docker tag "$repository:latest" "$image_uri"
     sha_image_uri="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$repository:$GIT_SHA"
     docker tag "$repository:latest" "$sha_image_uri"
-    echo "镜像标记成功 (latest + $GIT_SHA)"
+    echo "Image tagging succeeded (latest + $GIT_SHA)"
     echo ""
 
-    # 推送镜像
-    echo "推送镜像到 ECR..."
+    # Push the image
+    echo "Pushing image to ECR..."
     if docker push "$image_uri" && docker push "$sha_image_uri"; then
-        echo "镜像推送成功 (latest + $GIT_SHA)"
+        echo "Image push succeeded (latest + $GIT_SHA)"
     else
-        echo "镜像推送失败"
+        echo "Image push failed"
         exit 1
     fi
     echo ""
@@ -226,7 +226,7 @@ for service in $SERVICES_TO_BUILD; do
     # Clean up RDS CA certificate from build context
     rm -rf "$context/certs"
 
-    # 获取镜像摘要
+    # Get the image digest
     image_digest=$(aws ecr describe-images \
         --repository-name "$repository" \
         --region "$AWS_REGION" \
@@ -234,19 +234,19 @@ for service in $SERVICES_TO_BUILD; do
         --query 'imageDetails[0].imageDigest' \
         --output text 2>/dev/null || echo "unknown")
 
-    echo "服务 $service 处理完成"
+    echo "Service $service processing complete"
     echo "  Image URI: $image_uri"
     echo "  Image Digest: $image_digest"
     echo ""
 done
 
 echo "========================================="
-echo "所有镜像构建和推送完成！"
+echo "All images built and pushed successfully!"
 echo "========================================="
 echo ""
 
-# 列出所有镜像
-echo "ECR 镜像列表:"
+# List all images
+echo "ECR image list:"
 for service in $SERVICES_TO_BUILD; do
     config=$(get_service_config "$service")
     repository=$(echo "$config" | cut -d'|' -f1)
@@ -257,21 +257,21 @@ for service in $SERVICES_TO_BUILD; do
         --repository-name "$repository" \
         --region "$AWS_REGION" \
         --query 'imageDetails[*].[imageTags[0],imagePushedAt,imageSizeInBytes]' \
-        --output table 2>/dev/null || echo "  仓库为空或不存在"
+        --output table 2>/dev/null || echo "  Repository is empty or does not exist"
 done
 
 echo ""
 echo "========================================="
-echo "使用说明"
+echo "Usage"
 echo "========================================="
-echo "构建所有服务:"
+echo "Build all services:"
 echo "  ./build-and-push.sh"
 echo "  ./build-and-push.sh all"
 echo ""
-echo "构建单个服务:"
+echo "Build a single service:"
 echo "  ./build-and-push.sh functions"
 echo "  ./build-and-push.sh kong"
 echo "  ./build-and-push.sh postgrest-lambda"
 echo "  ./build-and-push.sh tenant-manager"
 echo ""
-echo "完成！"
+echo "Done!"

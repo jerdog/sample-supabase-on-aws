@@ -1,30 +1,30 @@
 # Kong Gateway Service
 
-Kong API Gateway 配置为 DB-less 模式，使用声明式配置文件管理路由。
+Kong API Gateway is configured in DB-less mode, using a declarative configuration file to manage routing.
 
-## 服务信息
+## Service Information
 
-- **Proxy 端口**: 8000
-- **Admin API 端口**: 8001 (仅内部访问)
-- **配置模式**: DB-less (声明式配置)
+- **Proxy port**: 8000
+- **Admin API port**: 8001 (internal access only)
+- **Configuration mode**: DB-less (declarative configuration)
 
-## 文件说明
+## File Overview
 
-- `kong.yml` - Kong 声明式配置文件
-- `Dockerfile` - Docker 镜像构建文件
-- `build-push.sh` - 构建并推送镜像到 ECR 的脚本
-- `README.md` - 本文件
+- `kong.yml` - Kong declarative configuration file
+- `Dockerfile` - Docker image build file
+- `build-push.sh` - Script to build and push the image to ECR
+- `README.md` - This file
 
-## Kong 配置 (kong.yml)
+## Kong Configuration (kong.yml)
 
-当前配置包含以下服务和路由：
+The current configuration includes the following services and routes:
 
-### hello-api 服务
-- **上游 URL**: http://hello-api.kong.local:8080
-- **路由路径**: /hello
-- **Strip Path**: false (保留完整路径)
+### hello-api service
+- **Upstream URL**: http://hello-api.kong.local:8080
+- **Route path**: /hello
+- **Strip Path**: false (keep the full path)
 
-### 配置示例
+### Configuration example
 ```yaml
 _format_version: "3.0"
 _transform: true
@@ -39,9 +39,9 @@ services:
         strip_path: false
 ```
 
-## 添加新路由
+## Adding a New Route
 
-### 1. 编辑 kong.yml
+### 1. Edit kong.yml
 ```yaml
 services:
   - name: your-service
@@ -53,12 +53,12 @@ services:
         strip_path: true
 ```
 
-### 2. 重新构建并推送
+### 2. Rebuild and push
 ```bash
 ./build-push.sh
 ```
 
-### 3. 重启 Kong 服务
+### 3. Restart the Kong service
 ```bash
 aws ecs update-service \
   --cluster kong-gateway-cluster \
@@ -67,17 +67,17 @@ aws ecs update-service \
   --region us-east-1
 ```
 
-## 路由配置说明
+## Route Configuration Notes
 
-### strip_path 参数
-- `strip_path: true` - 转发时去掉路由路径
-  - 请求: `/api/hello` → 转发: `/`
-- `strip_path: false` - 转发时保留完整路径
-  - 请求: `/hello` → 转发: `/hello`
+### strip_path parameter
+- `strip_path: true` - strips the route path when forwarding
+  - Request: `/api/hello` → forwarded as: `/`
+- `strip_path: false` - keeps the full path when forwarding
+  - Request: `/hello` → forwarded as: `/hello`
 
-### 示例场景
+### Example scenarios
 
-#### 场景 1: 上游服务有根路径 API
+#### Scenario 1: Upstream service has a root-path API
 ```yaml
 services:
   - name: api-service
@@ -88,9 +88,9 @@ services:
           - /api
         strip_path: true
 ```
-请求 `/api/users` → 转发到 `http://api.example.com/users`
+Request `/api/users` → forwarded to `http://api.example.com/users`
 
-#### 场景 2: 上游服务有特定路径
+#### Scenario 2: Upstream service has a specific path
 ```yaml
 services:
   - name: hello-api
@@ -101,11 +101,11 @@ services:
           - /hello
         strip_path: false
 ```
-请求 `/hello` → 转发到 `http://hello-api.kong.local:8080/hello`
+Request `/hello` → forwarded to `http://hello-api.kong.local:8080/hello`
 
-## 本地测试
+## Local Testing
 
-### 启动 Kong (使用 Docker)
+### Start Kong (using Docker)
 ```bash
 docker run -d --name kong \
   -p 8000:8000 \
@@ -120,38 +120,38 @@ docker run -d --name kong \
   kong:3.5
 ```
 
-### 测试路由
+### Test the routes
 ```bash
-# 测试 hello-api 路由
+# Test the hello-api route
 curl http://localhost:8000/hello
 
-# 查看 Kong 状态 (DB-less 模式下 Admin API 功能有限)
+# Check Kong status (Admin API has limited functionality in DB-less mode)
 curl http://localhost:8001/status
 ```
 
-## 构建并推送
+## Build and Push
 
-### 使用脚本
+### Using the script
 ```bash
 ./build-push.sh
 ```
 
-### 手动构建
+### Manual build
 ```bash
-# 登录 ECR
+# Log in to ECR
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
 
-# 构建镜像
+# Build the image
 docker buildx build --platform linux/amd64 -t kong-configured:latest . --load
 
-# 标记并推送
+# Tag and push
 docker tag kong-configured:latest <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/kong-configured:latest
 docker push <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/kong-configured:latest
 ```
 
-## 部署到 ECS
+## Deploying to ECS
 
-推送新镜像后，强制重启 Kong 服务：
+After pushing the new image, force a restart of the Kong service:
 
 ```bash
 aws ecs update-service \
@@ -161,45 +161,45 @@ aws ecs update-service \
   --region us-east-1
 ```
 
-等待约 1-2 分钟，新配置将生效。
+Wait about 1-2 minutes for the new configuration to take effect.
 
-## 环境变量
+## Environment Variables
 
-Kong 使用以下环境变量（在 ECS Task Definition 中配置）：
+Kong uses the following environment variables (configured in the ECS Task Definition):
 
-- `KONG_DATABASE=off` - 启用 DB-less 模式
-- `KONG_DECLARATIVE_CONFIG=/tmp/kong.yml` - 配置文件路径
-- `KONG_PROXY_ACCESS_LOG=/dev/stdout` - Proxy 访问日志
-- `KONG_ADMIN_ACCESS_LOG=/dev/stdout` - Admin 访问日志
-- `KONG_PROXY_ERROR_LOG=/dev/stderr` - Proxy 错误日志
-- `KONG_ADMIN_ERROR_LOG=/dev/stderr` - Admin 错误日志
-- `KONG_ADMIN_LISTEN=0.0.0.0:8001` - Admin API 监听地址
+- `KONG_DATABASE=off` - enables DB-less mode
+- `KONG_DECLARATIVE_CONFIG=/tmp/kong.yml` - configuration file path
+- `KONG_PROXY_ACCESS_LOG=/dev/stdout` - Proxy access log
+- `KONG_ADMIN_ACCESS_LOG=/dev/stdout` - Admin access log
+- `KONG_PROXY_ERROR_LOG=/dev/stderr` - Proxy error log
+- `KONG_ADMIN_ERROR_LOG=/dev/stderr` - Admin error log
+- `KONG_ADMIN_LISTEN=0.0.0.0:8001` - Admin API listen address
 
-## 故障排查
+## Troubleshooting
 
-### 查看 Kong 日志
+### View Kong logs
 ```bash
 aws logs tail /ecs/kong-gateway --follow --region us-east-1
 ```
 
-### 验证路由配置
-DB-less 模式下无法通过 Admin API 查询路由，建议：
-1. 检查 kong.yml 语法
-2. 查看容器启动日志
-3. 测试实际路由是否工作
+### Verify route configuration
+In DB-less mode, routes cannot be queried through the Admin API, so it's recommended to:
+1. Check the kong.yml syntax
+2. Review the container startup logs
+3. Test whether the actual routes work
 
-### 常见问题
+### Common issues
 
 **502 Bad Gateway**
-- 检查上游服务是否正常运行
-- 验证 Service Discovery DNS 解析
-- 确认 Security Group 规则允许 Kong 访问上游服务
+- Check whether the upstream service is running normally
+- Verify Service Discovery DNS resolution
+- Confirm that Security Group rules allow Kong to access the upstream service
 
 **404 Not Found**
-- 检查路由路径配置
-- 验证 strip_path 设置
-- 确认上游服务的实际端点路径
+- Check the route path configuration
+- Verify the strip_path setting
+- Confirm the actual endpoint path of the upstream service
 
-## Kong 版本
+## Kong Version
 
-当前使用 Kong 3.5 版本。
+Currently using Kong 3.5.

@@ -294,7 +294,7 @@ export async function getDatabaseCredentials(ref: string): Promise<DatabaseCrede
 }
 
 /**
- * 根据项目信息生成加密的连接字符串
+ * Generate an encrypted connection string from project info
  */
 /**
  * Trigger PostgREST schema cache reload for a project.

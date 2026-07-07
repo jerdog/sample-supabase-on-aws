@@ -9,21 +9,21 @@ echo ""
 
 BASE_URL="http://localhost:8080"
 
-# 测试 1: 健康检查
+# Test 1: Health Check
 echo "Test 1: Health Check"
 echo "-------------------"
 curl -s $BASE_URL/health | python3 -m json.tool
 echo ""
 echo ""
 
-# 测试 2: Functions 端点 (GET)
+# Test 2: Functions Endpoint (GET)
 echo "Test 2: Functions Endpoint (GET)"
 echo "--------------------------------"
 curl -s -H "X-Project-ID: test-project" $BASE_URL/functions | python3 -m json.tool
 echo ""
 echo ""
 
-# 测试 3: Functions 端点 (POST with data)
+# Test 3: Functions Endpoint (POST with data)
 echo "Test 3: Functions Endpoint (POST with data)"
 echo "-------------------------------------------"
 curl -s -X POST \
@@ -34,7 +34,7 @@ curl -s -X POST \
 echo ""
 echo ""
 
-# 测试 4: Functions 子路径
+# Test 4: Functions Subpath
 echo "Test 4: Functions Subpath"
 echo "-------------------------"
 curl -s -H "X-Project-ID: project-beta" \
@@ -42,14 +42,14 @@ curl -s -H "X-Project-ID: project-beta" \
 echo ""
 echo ""
 
-# 测试 5: 缺少 Project ID
+# Test 5: Missing Project ID
 echo "Test 5: Missing Project ID (should fail)"
 echo "----------------------------------------"
 curl -s $BASE_URL/functions | python3 -m json.tool
 echo ""
 echo ""
 
-# 测试 6: API 文档
+# Test 6: API Documentation
 echo "Test 6: API Documentation"
 echo "-------------------------"
 curl -s $BASE_URL/ | python3 -m json.tool

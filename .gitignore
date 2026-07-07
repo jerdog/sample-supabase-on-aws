@@ -64,7 +64,7 @@ doc/
 # directory's contents (not the dir itself, so git can descend) then re-include
 # the one published file.
 docs/*
-!docs/客户升级指南.html
+!docs/customer-upgrade-guide.html
 
 # Exclude tenant-manager and IDE/AI configs
 .cursor/

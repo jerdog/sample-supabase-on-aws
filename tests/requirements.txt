@@ -1,16 +1,16 @@
-# 测试依赖
+# Test dependencies
 
-# HTTP 客户端
+# HTTP client
 requests>=2.31.0
 urllib3>=2.0.0
 
-# Supabase SDK（用于 SDK 测试）
+# Supabase SDK (used for SDK tests)
 supabase>=2.0.0
 
-# 测试工具
+# Test tooling
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
-# 代码质量
+# Code quality
 pylint>=3.0.0
 black>=23.7.0

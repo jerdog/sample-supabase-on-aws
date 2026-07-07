@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supabase on AWS — Phase 2 Upgrade Guide</title>
+<style>
+  :root{
+    --fg:#1a1f29; --muted:#5b6472; --accent:#3ecf8e; --accent-dark:#249a63;
+    --border:#e3e8ef; --code-bg:#1e1e2e; --code-fg:#e4e6eb; --card:#f7f9fc;
+    --warn-bg:#fff8e6; --warn-border:#f0c000; --crit:#e5484d; --crit-bg:#fff0f0;
+    --ok-bg:#eafff3; --blue:#3b82f6; --blue-bg:#eff6ff; --step:#6d54c8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#eef1f5;color:var(--fg);line-height:1.7;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 40px rgba(0,0,0,.06);}
+  header{background:linear-gradient(135deg,#1a1f29 0%,#243b55 100%);color:#fff;padding:44px 50px 32px;}
+  header h1{margin:0 0 8px;font-size:27px;font-weight:700;}
+  header .sub{color:#9fb3c8;font-size:14px;}
+  header .meta{margin-top:16px;font-size:12.5px;color:#9fb3c8;}
+  header .meta b{color:var(--accent);}
+  main{padding:12px 50px 64px;}
+  h2{font-size:21px;margin:38px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--accent);}
+  h3{font-size:16px;margin:22px 0 9px;color:var(--accent-dark);}
+  p{margin:10px 0;}
+  code:not(pre code){background:#eef1f5;color:#c0392b;padding:1px 6px;border-radius:4px;font-size:13px;font-family:"SF Mono",Menlo,Consolas,monospace;}
+  pre{background:var(--code-bg);color:var(--code-fg);padding:15px 17px;border-radius:9px;overflow-x:auto;
+    font-size:12.5px;line-height:1.6;font-family:"SF Mono",Menlo,Consolas,monospace;margin:11px 0;}
+  pre .c{color:#7d8590;} pre .k{color:#ff9d6b;} pre .s{color:#a5d6a3;} pre .v{color:#79c0ff;}
+  .toc{background:var(--card);border-radius:10px;padding:16px 24px;margin:20px 0;}
+  .toc a{color:var(--accent-dark);text-decoration:none;margin-right:16px;font-size:13.5px;line-height:2.1;}
+  .toc a:hover{text-decoration:underline;}
+  table{border-collapse:collapse;width:100%;margin:13px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top;}
+  th{background:var(--card);font-weight:600;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  .step{position:relative;margin:24px 0;padding:0 0 0 54px;}
+  .step .num{position:absolute;left:0;top:0;width:38px;height:38px;border-radius:50%;background:var(--step);color:#fff;
+    font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;}
+  .step .num::after{content:"";position:absolute;left:50%;top:42px;bottom:-24px;width:2px;background:var(--border);transform:translateX(-50%);}
+  .step:last-child .num::after{display:none;}
+  .step h3{margin:6px 0 9px;color:var(--fg);font-size:16px;}
+  .note{background:var(--blue-bg);border-left:4px solid var(--blue);padding:11px 16px;border-radius:0 8px 8px 0;margin:11px 0;font-size:13.5px;}
+  .important{background:var(--warn-bg);border-left:4px solid var(--warn-border);padding:11px 16px;border-radius:0 8px 8px 0;margin:11px 0;font-size:13.5px;}
+  .caution{background:var(--crit-bg);border-left:4px solid var(--crit);padding:11px 16px;border-radius:0 8px 8px 0;margin:11px 0;font-size:13.5px;}
+  .ok{background:var(--ok-bg);border-left:4px solid var(--accent);padding:11px 16px;border-radius:0 8px 8px 0;margin:11px 0;font-size:13.5px;}
+  .label{font-weight:700;color:var(--accent-dark);}
+  .label-c{font-weight:700;color:var(--crit);}
+  .chk{list-style:none;padding-left:0;} .chk li{margin:7px 0;padding-left:26px;position:relative;}
+  .chk li::before{content:"\2713";position:absolute;left:0;color:var(--accent-dark);font-weight:700;}
+  footer{color:var(--muted);font-size:12px;padding:24px 50px 44px;border-top:1px solid var(--border);}
+  .green{color:var(--accent-dark);font-weight:600;}
+  @media print{body{background:#fff;}.wrap{box-shadow:none;}pre{background:#f4f4f4!important;color:#222!important;}pre span{color:#222!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Supabase on AWS — Phase 2 Upgrade Guide</h1>
+  <div class="sub">Upgrading from the current baseline version to Phase 2 · Operations Runbook</div>
+  <div class="meta">Applicable deployment mode:<b>Local image build + AWS CDK deploy</b> · Upgrade method:<b>git pull + cdk deploy (in-place upgrade)</b></div>
+</header>
+<main>
+
+  <div class="toc">
+    <a href="#s1">1. Upgrade Overview</a>
+    <a href="#s2">2. Prerequisites</a>
+    <a href="#s3">3. Pre-Upgrade Preparation</a>
+    <a href="#s4">4. Pull the Latest Code</a>
+    <a href="#s5">5. Build and Push Images</a>
+    <a href="#s6">6. Deploy (CDK)</a>
+    <a href="#s7">7. Refresh Service Images</a>
+    <a href="#s8">8. Post-Upgrade Verification</a>
+    <a href="#s9">9. Rollback Plan</a>
+    <a href="#s10">10. Troubleshooting</a>
+    <a href="#mech">11. Upgrade Mechanism Quick Reference (Path A/B · Service Name Mapping)</a>
+    <a href="#feat">12. Phase 2's 6 Key Changes: Deployment · Usage · Testing</a>
+  </div>
+
+  <!-- 1 -->
+  <h2 id="s1">1. Upgrade Overview</h2>
+  <p>Phase 2 <b>adds a new Storage subsystem</b> on top of the existing platform, and enhances Edge Functions, project lifecycle management, and security. Key changes:</p>
+  <table>
+    <tr><th>Capability</th><th>Description</th></tr>
+    <tr><td><b>Storage (new)</b></td><td>Object storage service with multi-tenant isolation. Adds one S3 bucket + one storage service + a database storage schema.</td></tr>
+    <tr><td>Edge Functions <code>verify_jwt</code></td><td>Supports disabling JWT verification at deploy time (for webhook scenarios), configurable in a single deploy step.</td></tr>
+    <tr><td>Project pause / resume / delete</td><td>After pausing, the data plane truly stops serving requests; resuming restores it.</td></tr>
+    <tr><td>Secrets override semantics</td><td>A secret with the same name overrides rather than stacks.</td></tr>
+    <tr><td>Function error classification</td><td>Code errors return 422 (instead of a misleading 404).</td></tr>
+    <tr><td>Security hardening</td><td>Tenant isolation, secret lifecycle, and dependency CVE fixes.</td></tr>
+  </table>
+  <div class="ok"><span class="label">Zero impact on existing data:</span>The upgrade does not modify any end-user tables or data; all database changes are additive (new tables / new schemas) and do not affect existing reads/writes. Existing API keys and Edge Functions remain valid.</div>
+
+  <!-- 2 -->
+  <h2 id="s2">2. Prerequisites</h2>
+  <p>The operations machine performing the upgrade must have:</p>
+  <ul class="chk">
+    <li><code>docker</code> (able to build <code>linux/amd64</code> images)</li>
+    <li><code>node</code>, <code>pnpm</code>, <code>go</code>, <code>deno</code> (build toolchains for the various services)</li>
+    <li><code>aws cli</code> (configured with credentials for the target account)</li>
+    <li>AWS CDK (the target account has already completed <code>cdk bootstrap</code>)</li>
+    <li><code>jq</code> (required by the test scripts)</li>
+  </ul>
+  <div class="important"><span class="label">Config files are not part of the code:</span><code>config.json</code> and <code>certs/</code> are not under version control (they contain sensitive deployment values). The upgrade process will not overwrite them, but please confirm their contents are valid for the current environment.</div>
+
+  <!-- 3 -->
+  <h2 id="s3">3. Pre-Upgrade Preparation</h2>
+  <div class="step"><div class="num">1</div>
+    <h3>Back Up Configuration</h3>
+    <pre>cp config.json config.json.bak</pre>
+  </div>
+  <div class="step"><div class="num">2</div>
+    <h3>Confirm config.json Contains the storage Section</h3>
+    <p>Phase 2 introduces Storage, so <code>config.json</code> needs to include a <code>storage</code> section (the baseline version does not have one). If it is missing, add it by referring to the config template <code>config.production.json</code>:</p>
+    <pre><span class="k">"storage"</span>: {
+  <span class="k">"bucket"</span>: { <span class="k">"mode"</span>: <span class="s">"create"</span> },   <span class="c">// create = create a new bucket; or "existing"+"name" = reference an existing bucket</span>
+  <span class="k">"fileSizeLimitBytes"</span>: <span class="v">52428800</span>,      <span class="c">// per-file limit (50 MiB)</span>
+  <span class="k">"imageTransformationEnabled"</span>: <span class="v">false</span>
+}</pre>
+    <p>Verify: <code>cat config.json | jq '.storage'</code></p>
+  </div>
+  <div class="step"><div class="num">3</div>
+    <h3>(Recommended) Eliminate the Gateway Single-Point Interruption Window</h3>
+    <p>If the gateway service <code>kong</code> has a <code>desiredCount</code> of 1, restarting it during the upgrade will cause a brief interruption (tens of seconds) to the data plane. It's recommended to set <code>kong.desiredCount</code> to <b>2</b> in <code>config.json</code> and deploy it separately before the upgrade (during a low-traffic window); after that, gateway upgrades can be zero-downtime.</p>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="s4">4. Pull the Latest Code</h2>
+  <p><b>First decide which path to take:</b></p>
+  <ul>
+    <li>The operations machine <b>already has a git repository for this project and a clean working tree</b> → use <b>Method A (git pull)</b>.</li>
+    <li>The operations machine <b>has no repository, or the working tree has unconfirmed local changes</b> → use <b>Method B (git clone)</b>.</li>
+    <li>If you prefer to <b>copy the new version's code into a new project directory and reuse the original config to update the existing environment</b> → use <b>Method C</b>.</li>
+  </ul>
+  <p>Commands to check: <code>git rev-parse --is-inside-work-tree</code> and <code>git status --short</code>.</p>
+  <div class="ok"><span class="label">All three methods produce the same deployment result:</span>As long as the stack name, account/region, and physical resource names stay unchanged, A / B / C are all <b>in-place updates of the same environment</b>, and the subsequent build/deploy steps are identical. The only difference is "how the new code gets onto the operations machine."</div>
+
+  <h3>Method A: git pull (incremental update)</h3>
+  <div class="important"><span class="label">Complete the following pre-cleanup steps before running pull.</span>Otherwise, the pull may fail due to local file conflicts.</div>
+  <pre><span class="c"># Pre-step 1: remove the local untracked lockfile</span>
+<span class="c">#   In earlier versions this file was not under version control, so the ops machine may have a local copy;</span>
+<span class="c">#   the new version has added it to git — if not cleaned up, pull will report</span>
+<span class="c">#   "untracked working tree files would be overwritten by merge".</span>
+rm -f app/function-deploy/pnpm-lock.yaml
+
+<span class="c"># Pre-step 2: check for local changes (if status is non-empty, stash first)</span>
+git status
+git stash        <span class="c"># only if there are local changes you need to keep</span>
+
+<span class="c"># After pre-steps are done, pull the latest code</span>
+git fetch origin
+git pull origin main
+
+<span class="c"># If you ran stash earlier and still need those changes: git stash pop</span></pre>
+
+  <h3>Method B: git clone (fresh checkout)</h3>
+  <pre><span class="c"># 1) Fresh clone into a new directory</span>
+git clone &lt;repository-url&gt; supabase-app
+cd supabase-app
+git checkout main
+
+<span class="c"># 2) Migrate local files that aren't tracked by git (copy from the old ops directory)</span>
+cp &lt;old-dir&gt;/config.json ./config.json
+cp -r &lt;old-dir&gt;/certs ./certs
+
+<span class="c"># 3) Confirm config.json contains the storage section (see Section 3, Step 2)</span>
+cat config.json | jq '.storage'</pre>
+
+  <h3>Method C: Copy into a new project directory, reuse the original config to update the existing environment</h3>
+  <p>If you prefer to <b>copy the new version's code into a new project directory</b> (rather than pulling in the original directory), then copy in the existing environment's config and redeploy, this will <b>update the existing environment in place</b> (it will not create a second one). This is fundamentally the same as Method B — the only difference is it's used to "update an existing environment" rather than "stand up an independent environment."</p>
+  <pre><span class="c"># 1) Prepare the new version's code directory (clone or extract the new version)</span>
+git clone &lt;repository-url&gt; supabase-app-new
+cd supabase-app-new && git checkout main
+
+<span class="c"># 2) Copy config and certs in from the original environment (key point: reusing the original config = updating the original environment)</span>
+cp &lt;old-dir&gt;/config.json ./config.json
+cp -r &lt;old-dir&gt;/certs ./certs
+cat config.json | jq '.storage'    <span class="c"># confirm it contains the storage section</span></pre>
+  <div class="important"><span class="label">To update the existing environment, the following three items must exactly match the original environment (reusing the original config satisfies this):</span>
+  <ul style="margin:6px 0;">
+    <li><b>Deployment stack name <code>SupabaseStack</code></b> (hard-coded in the code, don't change it) — the deploy tooling identifies its target by stack name; only a matching stack name will update the existing stack instead of creating a new one.</li>
+    <li><b>The same AWS account and region</b> (<code>config.json</code>'s <code>project.accountId</code> / <code>project.region</code>).</li>
+    <li><b>The physical names of each resource are unchanged</b>: <code>infraStack.cluster.name</code>, <code>loadBalancer.name</code>, <code>studioLoadBalancer.name</code>, <code>workerRds.clusterIdentifier</code>, <code>secrets.prefix</code>, <code>domain.baseDomain</code>.</li>
+  </ul>
+  If all three match → the subsequent <code>cdk deploy SupabaseStack</code> performs an <b>incremental update</b> (in-place upgrade) of the existing environment, and will not produce a second set of resources.</div>
+  <div class="caution"><span class="label-c">Reminder — the reverse also applies:</span>If any one of the three items above is changed (especially the <b>stack name</b> or <b>account/region</b>), the behavior changes — this can create a brand-new parallel environment, or cause the deployment to fail due to physical resource name conflicts. To update the existing environment, do not change them.</div>
+
+  <!-- 5 -->
+  <h2 id="s5">5. Build and Push Images</h2>
+  <p>Build the service images involved in this upgrade and push them to ECR (the script automatically creates any missing ECR repositories):</p>
+  <pre>./build-and-push.sh storage          <span class="c"># new service</span>
+./build-and-push.sh tenant-manager
+./build-and-push.sh functions
+./build-and-push.sh function-deploy
+./build-and-push.sh kong             <span class="c"># Required: the gateway route config includes Storage routes</span>
+./build-and-push.sh auth</pre>
+  <div class="caution"><span class="label-c">You must rebuild <code>kong</code>:</span>The gateway's route configuration (<code>kong.yml.tpl</code>) added Storage routes in Phase 2. If you keep the old gateway image, Storage data-plane requests will return <code>404 no Route matched</code>.</div>
+  <div class="note"><span class="label">Confirm which services need rebuilding:</span>Run <code>git diff &lt;baseline-version&gt; HEAD --name-only | grep '^app/'</code> — any service with code changes under <code>app/</code> needs to be rebuilt. This time that's storage, tenant-manager, functions, function-deploy, kong, and auth.</div>
+  <div class="note"><span class="label">Build tip:</span>If the auth service (Go) times out fetching dependencies during the build, its Dockerfile is already configured with a mainland China dependency mirror/proxy; function-deploy's lockfile is already under version control, so a clean checkout is enough to build.</div>
+
+  <!-- 6 -->
+  <h2 id="s6">6. Deploy (CDK)</h2>
+  <div class="step"><div class="num">1</div>
+    <h3>Compile and Review Changes</h3>
+    <pre>cd infra && npm run build
+cdk diff SupabaseStack</pre>
+    <p>Expected changes: a new S3 bucket, a new storage service, and updates to several task definitions (TaskDefinitions). <b>Confirm the changes do not include a "replace" of any stateful resource such as the database cluster, S3 bucket, or cache</b> — a normal upgrade only updates task definitions and should never replace stateful resources.</p>
+    <div class="caution"><span class="label-c">Version compatibility:</span>Make sure the CDK CLI version is compatible with the project's <code>aws-cdk-lib</code> dependency version. If you see <code>Cloud assembly schema version mismatch</code>, upgrade the CDK CLI or pin <code>aws-cdk-lib</code> to a matching version.</div>
+  </div>
+  <div class="step"><div class="num">2</div>
+    <h3>Run the Deployment</h3>
+    <pre>cdk deploy SupabaseStack --require-approval never</pre>
+    <p>This step creates the new S3 bucket and storage service, and updates the task definitions. Watch each service's rollout status during deployment.</p>
+    <div class="important"><span class="label">No automatic rollback:</span>The deployment does not have the circuit breaker enabled, so a bad image will not automatically roll back. Monitor the deployment status until it reaches <code>COMPLETED</code>:
+    <pre>aws ecs describe-services --cluster &lt;cluster-name&gt; \
+  --services storage-api kong-gateway tenant-manager \
+  --region &lt;region&gt; \
+  --query 'services[*].[serviceName,deployments[0].rolloutState]'</pre></div>
+  </div>
+
+  <!-- 7 -->
+  <h2 id="s7">7. Refresh Service Images (Critical Step)</h2>
+  <div class="caution"><span class="label-c">Mandatory — do not skip:</span>CDK references images via the <code>:latest</code> tag. <code>cdk deploy</code> only triggers a service to pull a new image <b>when the task definition's structure changes</b>. For services whose code was updated but whose task definition did not change, <code>cdk deploy</code> <b>will not</b> make them pull the new image — the service will keep running the old code.</div>
+  <p>Therefore, after the deployment completes, you need to force a refresh of <b>every service whose image was rebuilt</b>:</p>
+  <pre>for svc in kong-gateway tenant-manager functions-service \
+           function-deploy auth-service storage-api; do
+  aws ecs update-service --cluster &lt;cluster-name&gt; \
+    --service "$svc" --force-new-deployment --region &lt;region&gt; \
+    --query 'service.deployments[0].rolloutState' --output text
+done</pre>
+  <div class="note"><span class="label">A note on service names:</span>ECS service names and ECR repository names may differ (e.g., repositories <code>functions-service</code> / <code>kong-configured</code> correspond to services <code>functions-service</code> / <code>kong-gateway</code>). You can use <code>aws ecs list-services --cluster &lt;cluster-name&gt;</code> to look up the actual service names.</div>
+  <div class="note"><span class="label">Database migrations (automatic):</span>Schema changes to the platform database and each tenant database run automatically when the corresponding service starts. They are all additive operations, requiring no manual intervention and no rollback.</div>
+
+  <!-- 8 -->
+  <h2 id="s8">8. Post-Upgrade Verification</h2>
+  <p>The project's built-in test suite can automatically detect configuration from CloudFormation outputs and <code>config.json</code>. Run these from the <code>tests/</code> directory:</p>
+  <pre>cd tests
+
+<span class="c"># New capabilities in Phase 2</span>
+./RUN_TESTS.sh storage                          <span class="c"># Storage</span>
+PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh verify-jwt     <span class="c"># Edge Function verify_jwt</span>
+./RUN_TESTS.sh lifecycle                        <span class="c"># pause/resume/delete</span>
+PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh secrets        <span class="c"># Secrets override</span>
+PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh fn-errors      <span class="c"># Function error classification</span>
+
+<span class="c"># Regression for existing functionality</span>
+./RUN_TESTS.sh isolation                        <span class="c"># tenant isolation</span>
+./RUN_TESTS.sh functions                        <span class="c"># Edge Functions lifecycle</span>
+./RUN_TESTS.sh studio
+./RUN_TESTS.sh auth</pre>
+  <div class="ok"><span class="label">Pass criteria:</span>Every test case in every suite is PASSED (it's normal for verify-jwt to include 1 environment-related skip). If storage reports 404, or function error classification returns the old format, this is usually because <b>the image refresh in Section 7 was not performed</b> (see Section 10).</div>
+
+  <!-- 9 -->
+  <h2 id="s9">9. Rollback Plan</h2>
+  <table>
+    <tr><th>Issue</th><th>Rollback method</th></tr>
+    <tr><td>Image issue (service fails to start)</td><td>Roll the service image tag back to the previous version (ECR retains historical images), or revert the code and re-run <code>cdk deploy</code>.</td></tr>
+    <tr><td>CDK stack changes</td><td>Check out the baseline version's code and run <code>cdk deploy</code> to roll back (this upgrade has no destructive resource changes, so it is reversible).</td></tr>
+    <tr><td>Database migrations</td><td><b>No rollback needed</b> — they are all additive (new tables/schemas) and do not affect the old code.</td></tr>
+  </table>
+  <div class="important"><span class="label">Prerequisite for rollback:</span>Before upgrading, record the current image tags for each service and the code version (<code>git rev-parse HEAD</code>), so you can roll back if needed.</div>
+
+  <!-- 10 -->
+  <h2 id="s10">10. Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Cause</th><th>Resolution</th></tr>
+    <tr><td>git pull reports untracked files would be overwritten</td><td>An untracked pnpm-lock.yaml exists locally</td><td>Run pre-step 1 from Section 4: <code>rm -f app/function-deploy/pnpm-lock.yaml</code></td></tr>
+    <tr><td>Project build fails, reporting missing lockfile / package-lock</td><td>Dependency lockfile is missing</td><td>Run <code>pnpm install --lockfile-only</code> or <code>npm install</code> in the corresponding service directory to generate it, then build</td></tr>
+    <tr><td>cdk diff reports schema version mismatch</td><td>CDK CLI and aws-cdk-lib versions are incompatible</td><td>Upgrade the CDK CLI, or pin aws-cdk-lib to a compatible version</td></tr>
+    <tr><td class="label-c">Storage requests return 404 "no Route matched"</td><td>The kong gateway was not rebuilt/refreshed and is missing the Storage route</td><td>Rebuild the kong image (Section 5) + force-refresh the kong service (Section 7)</td></tr>
+    <tr><td class="label-c">Function errors return the old format (404 instead of 422), or the service still behaves like the old version</td><td>cdk deploy did not trigger this service to pull the new image</td><td>Run <code>force-new-deployment</code> on that service (Section 7)</td></tr>
+    <tr><td>Creating a project reports No database instances registered</td><td>No database instance is registered with the platform (most common on a fresh deployment)</td><td>Run <code>./scripts/provision-worker-and-create-project.sh</code> to register one</td></tr>
+    <tr><td>The data-plane domain is unreachable (after a fresh deployment / replacing the load balancer)</td><td>The wildcard subdomain DNS does not point at the current gateway ALB</td><td>Point the CNAME for <code>*.&lt;your-domain&gt;</code> at the gateway ALB referenced by the CFN output <code>ALBDnsName</code>, and wait for DNS to propagate</td></tr>
+  </table>
+
+  <!-- 11 Upgrade mechanism quick reference -->
+  <h2 id="mech">11. Upgrade Mechanism Quick Reference (Path A/B · Service Name Mapping)</h2>
+  <p>How to make a change take effect during an upgrade depends on <b>what you changed</b>. Picking the wrong path is the most common reason for "I changed it but nothing happened."</p>
+
+  <h3>Path A: Service Code Changes (Docker Images)</h3>
+  <p>Changing any service under <code>app/*</code> (Kong config, GoTrue, tenant-manager, Studio, etc.) requires rebuilding the image and forcing ECS to pull it. <b><code>cdk deploy</code> will not pull a new image if the image tag is unchanged</b> — the task definition still points at <code>:latest</code>, so ECS keeps the old task running. You must force a refresh:</p>
+  <pre><span class="c"># 1. Rebuild and push (pushes both :latest and :&lt;git-sha&gt;)</span>
+./build-and-push.sh &lt;service&gt;      <span class="c"># e.g. kong, auth, tenant-manager</span>
+<span class="c"># 2. Force ECS to pull the new :latest and replace the running task</span>
+aws ecs update-service --cluster &lt;cluster&gt; --service &lt;service-name&gt; --force-new-deployment --region &lt;region&gt;
+<span class="c"># 3. Wait for the rollout to stabilize</span>
+aws ecs wait services-stable --cluster &lt;cluster&gt; --services &lt;service-name&gt; --region &lt;region&gt;</pre>
+  <p>The ECR repository name and ECS service name differ for some services:</p>
+  <table>
+    <tr><th><code>build-and-push.sh</code> argument</th><th>ECS service name</th></tr>
+    <tr><td><code>kong</code></td><td><code>kong-gateway</code></td></tr>
+    <tr><td><code>auth</code></td><td><code>auth-service</code></td></tr>
+    <tr><td><code>functions</code></td><td><code>functions-service</code></td></tr>
+    <tr><td><code>storage</code></td><td><code>storage-api</code></td></tr>
+    <tr><td><code>tenant-manager</code> / <code>studio</code> / <code>function-deploy</code> / <code>postgres-meta</code></td><td>Same name</td></tr>
+  </table>
+
+  <h3>Path B: Infrastructure Changes (CDK)</h3>
+  <p>Changes to <code>infra/</code> (VPC, RDS, ECS task definitions, ALB, IAM, env, etc.) go through CDK. Task definition changes (new env vars, CPU/memory, etc.) <b>will</b> automatically roll the service:</p>
+  <pre>cd infra &amp;&amp; npm run build &amp;&amp; npx cdk diff SupabaseStack   <span class="c"># preview</span>
+npx cdk deploy SupabaseStack --require-approval never</pre>
+  <div class="note"><span class="label">Rule of thumb:</span>Image content changed → Path A (<code>force-new-deployment</code>); task/infrastructure definitions changed → Path B (<code>cdk deploy</code>). If both changed (e.g., a new image plus a new env var it needs to read), do B first, then A.</div>
+
+  <h3>Kong Notes (DB-backed Declarative Configuration)</h3>
+  <p>Kong runs in DB-backed mode, importing <code>kong.yml.tpl</code> via <code>kong config db_import</code> on startup — this is an <b>incremental upsert that never deletes</b> entities removed from the config. The entrypoint script runs an idempotent self-heal (<code>heal-stale-plugins.lua</code>) on every startup, clearing out service-level auth plugins left over from old configs. So for <code>kong-gateway</code>, simply rebuild + <code>force-new-deployment</code> — no manual DB cleanup is needed.</p>
+
+  <h3>Auth Schema Notes (Template Cloning + Existing Tenants)</h3>
+  <p>New tenant databases are <b>cloned</b> from the cached <code>supabase_template</code> database, rather than having DDL run against an empty database; and the schema DDL uses <code>CREATE TABLE IF NOT EXISTS</code>, which is a no-op against tables that already exist. So <b>changing only the <code>CREATE TABLE</code> statements in <code>auth-schema.ts</code> can never backfill new columns</b> — neither the template nor existing tenant databases would get the new columns, and newly created tenants would keep cloning the stale template.</p>
+  <p>On startup, tenant-manager runs a set of idempotent <code>ALTER TABLE ... ADD COLUMN IF NOT EXISTS</code> statements (see <code>AUTH_SCHEMA_HEAL_STATEMENTS</code>) against the template database <b>and every existing tenant database on every registered instance</b>, so both fresh deployments and upgrade deployments converge on the current schema. This self-heal is idempotent (columns that already exist are skipped) and fail-open (locked/paused tenant databases are automatically skipped, and it will never block startup). It <b>only adds columns/constraints — it never deletes or modifies any existing data</b>. So for <code>tenant-manager</code>, simply rebuild + <code>force-new-deployment</code> — there's no need to manually drop the template database or backfill columns database-by-database.</p>
+  <div class="caution"><span class="label-c">Table changes must ship with a matching patch:</span>After adding a column to a table in <code>auth-schema.ts</code>, you must also add a corresponding <code>ADD COLUMN IF NOT EXISTS</code> statement to <code>AUTH_SCHEMA_HEAL_STATEMENTS</code> — otherwise the change stops at the code and never reaches the database.</div>
+
+  <!-- 12 -->
+  <h2 id="feat">12. Phase 2's 6 Key Changes: Deployment · Usage · Testing</h2>
+  <p>This section walks through the 6 changes from the Phase 2 requirements one by one: <b>which services are involved (deployment), how to use the interfaces (usage), and how to verify them (testing)</b>. Sections 1–10 above are the general upgrade process; this section drills into each capability. In the tables below, <code>&lt;ref&gt;</code> is the project ID, <code>&lt;domain&gt;</code> is the base domain, <code>&lt;studio-alb&gt;</code> is the Studio ALB domain, and <code>&lt;admin-key&gt;</code> is the admin key (Secrets Manager <code>supabase/admin-api-key</code>).</p>
+  <table>
+    <tr><th>#</th><th>Change</th><th>Services to rebuild</th><th>Test suite</th></tr>
+    <tr><td>1</td><td>Storage object storage</td><td>storage, kong</td><td><code>./RUN_TESTS.sh storage</code></td></tr>
+    <tr><td>2</td><td>Function <code>verify_jwt</code></td><td>function-deploy, functions</td><td><code>./RUN_TESTS.sh verify-jwt</code></td></tr>
+    <tr><td>3</td><td>Project pause / resume / delete</td><td>tenant-manager</td><td><code>./RUN_TESTS.sh lifecycle</code></td></tr>
+    <tr><td>4</td><td>Secrets override semantics</td><td>function-deploy (studio)</td><td><code>./RUN_TESTS.sh secrets</code></td></tr>
+    <tr><td>5</td><td>Login enhancements (Google OAuth, etc.)</td><td>auth, tenant-manager, kong, function-deploy</td><td><code>./RUN_TESTS.sh oauth</code></td></tr>
+    <tr><td>6</td><td>Function error classification (404→422)</td><td>function-deploy</td><td><code>./RUN_TESTS.sh fn-errors</code></td></tr>
+  </table>
+
+  <!-- ===== 11.1 Storage ===== -->
+  <h3>11.1 Storage Object Storage (New)</h3>
+  <p><b>Deployment</b>: Adds an S3 bucket + storage service + database storage schema. <code>config.json</code>'s <code>storage.bucket.mode</code> determines where the bucket comes from: <code>create</code> = CDK creates and manages a new bucket; <code>existing</code>+<code>name</code> = reference an existing bucket (CDK only grants permissions, it does not create/delete it). Requires rebuilding <b>storage</b> and <b>kong</b> (the gateway includes the Storage route).</p>
+  <pre><span class="c"># config.json</span>
+<span class="k">"storage"</span>: { <span class="k">"bucket"</span>: { <span class="k">"mode"</span>: <span class="s">"create"</span> }, <span class="k">"fileSizeLimitBytes"</span>: <span class="v">52428800</span>, <span class="k">"imageTransformationEnabled"</span>: <span class="v">false</span> }
+<span class="c"># Build + refresh</span>
+./build-and-push.sh storage && ./build-and-push.sh kong
+aws ecs update-service --cluster &lt;cluster&gt; --service storage-api --force-new-deployment --region &lt;region&gt;</pre>
+  <p><b>Usage</b>: All Storage requests go through the Kong gateway via the project subdomain (Kong validates the opaque apikey with key-auth, injects <code>X-Project-ID</code>, and mints a short-lived 5-minute JWT for storage-api; storage-api uses it to enforce multi-tenant isolation). Base URL: <code>https://&lt;ref&gt;.&lt;domain&gt;/storage/v1</code>, with every request carrying an <code>apikey: &lt;key&gt;</code> header (anon or service_role opaque key).</p>
+
+  <p>Full API quick reference (the newly added object storage data plane; all paths verified against the source at <code>app/storage/src/http/routes/</code>, prefixed with <code>/storage/v1</code>. The fastify wildcard segment <code>*</code> is the object path):</p>
+  <table>
+    <tr><th>Capability</th><th>Method + path (under the <code>/storage/v1</code> prefix)</th><th>Notes / body</th></tr>
+    <tr><td>Create bucket</td><td><code>POST /bucket</code></td><td>body <code>{"id","name","public","file_size_limit","allowed_mime_types"}</code></td></tr>
+    <tr><td>List buckets</td><td><code>GET /bucket</code></td><td>All buckets for the current tenant</td></tr>
+    <tr><td>Get / update a bucket</td><td><code>GET /bucket/{id}</code> · <code>PUT /bucket/{id}</code></td><td>Change public / size / mime restrictions</td></tr>
+    <tr><td>Empty / delete a bucket</td><td><code>POST /bucket/{id}/empty</code> · <code>DELETE /bucket/{id}</code></td><td>Deleting requires emptying first</td></tr>
+    <tr><td>Upload object</td><td><code>POST /object/{bucket}/*</code></td><td>Binary body + <code>Content-Type</code>; use <code>PUT /object/{bucket}/*</code> to overwrite an upload</td></tr>
+    <tr><td>Download (authenticated)</td><td><code>GET /object/authenticated/{bucket}/*</code></td><td>Fetch from a private bucket subject to RLS (the standard path)</td></tr>
+    <tr><td>Download (public bucket)</td><td><code>GET /object/public/{bucket}/*</code></td><td>Unauthenticated read for public buckets</td></tr>
+    <tr><td>Object metadata</td><td><code>GET /object/info/authenticated/{bucket}/*</code></td><td>Fetch metadata; public bucket variant is <code>/object/info/public/{bucket}/*</code></td></tr>
+    <tr><td>Copy</td><td><code>POST /object/copy</code></td><td>body <code>{"bucketId","sourceKey","destinationKey"}</code></td></tr>
+    <tr><td>Move</td><td><code>POST /object/move</code></td><td>body <code>{"bucketId","sourceKey","destinationKey"}</code></td></tr>
+    <tr><td>Delete a single object</td><td><code>DELETE /object/{bucket}/*</code></td><td>Path includes the object key</td></tr>
+    <tr><td>Bulk delete</td><td><code>DELETE /object/{bucket}</code></td><td>No trailing <code>/*</code>; body <code>{"prefixes":["a.png","b.png"]}</code></td></tr>
+    <tr><td>List objects V1</td><td><code>POST /object/list/{bucket}</code></td><td>body <code>{"prefix","limit","offset"}</code></td></tr>
+    <tr><td>List objects V2</td><td><code>POST /object/list-v2/{bucket}</code></td><td>Hyphenated <code>list-v2</code>; cursor-based pagination via <code>cursor</code></td></tr>
+    <tr><td>Signed download URL (single)</td><td><code>POST /object/sign/{bucket}/*</code></td><td>body <code>{"expiresIn":60}</code> → returns <code>signedURL</code></td></tr>
+    <tr><td>Signed download URLs (batch)</td><td><code>POST /object/sign/{bucket}</code></td><td>No trailing <code>/*</code>; body <code>{"paths":[...],"expiresIn":60}</code></td></tr>
+    <tr><td>Download with a signed token</td><td><code>GET /object/sign/{bucket}/*?token=...</code></td><td>Unauthenticated, relying on the signed token</td></tr>
+    <tr><td>Signed upload URL</td><td><code>POST /object/upload/sign/{bucket}/*</code></td><td>Note the order is <code>upload/sign</code>; after issuing, upload with <code>PUT /object/upload/sign/{bucket}/*</code></td></tr>
+  </table>
+  <pre><span class="c"># End-to-end example: create bucket → upload → download → signed URL → delete</span>
+B=https://&lt;ref&gt;.&lt;domain&gt;/storage/v1 ; H="apikey: &lt;key&gt;"
+curl -X POST "$B/bucket"  -H "$H" -H "Content-Type: application/json" -d '{"id":"my-bucket","name":"my-bucket","public":false}'
+curl -X POST "$B/object/my-bucket/hello.txt" -H "$H" -H "Content-Type: text/plain" --data-binary @hello.txt
+curl       "$B/object/authenticated/my-bucket/hello.txt" -H "$H"            <span class="c"># download round-trip</span>
+curl -X POST "$B/object/sign/my-bucket/hello.txt" -H "$H" -d '{"expiresIn":60}'   <span class="c"># → {"signedURL":"/object/sign/..."}</span>
+curl -X DELETE "$B/object/my-bucket/hello.txt" -H "$H"</pre>
+  <div class="note"><span class="label">The official supabase-js client works the same way:</span><code>createClient(url, key).storage.from('my-bucket').upload(...)/download(...)/createSignedUrl(...)</code> — internally, the SDK calls the endpoints listed above.</div>
+
+  <p><b>Testing</b>: <code>PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh storage</code> — S0 tenant registration, S1-S2 bucket CRUD, S3-S4 object upload/download round-trip, S5 signed URLs, S6-S7 delete/cleanup — 8 checks in total.</p>
+  <div class="caution"><span class="label-c">You must rebuild kong:</span>If you keep the old gateway image, Storage requests will return <code>404 no Route matched</code>.</div>
+
+  <!-- ===== 11.2 verify_jwt ===== -->
+  <h3>11.2 Function <code>verify_jwt</code> Parameter (webhook scenarios)</h3>
+  <p><b>Deployment</b>: Rebuild <b>function-deploy</b> (the deploy pipeline persists verify_jwt) and <b>functions</b> (the runtime enforces the actual verify_jwt value). No new infrastructure.</p>
+  <p><b>Usage</b>: Include <code>verify_jwt</code> in the <code>metadata</code> at deploy time (no separate PATCH needed). With <code>verify_jwt:false</code>, the function allows anonymous access without a JWT (for webhook callbacks such as Stripe / GitHub).</p>
+  <pre><span class="c"># Deploy a webhook function (no JWT verification)</span>
+<span class="c"># The metadata field in the multipart deploy request (field name verified against deploy.ts):</span>
+{ <span class="k">"verify_jwt"</span>: <span class="v">false</span>, <span class="k">"entrypoint_path"</span>: <span class="s">"index.ts"</span> }</pre>
+  <p><b>Testing</b>: <code>PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh verify-jwt</code> — V1 internal lookup defaults to true, V2 deploy persists it, V3 <code>true</code> rejects anonymous, V4 <code>false</code> allows anonymous (webhook), V5 still works with an apikey, V6 switching back re-enforces it — 6 checks in total (including 1 environment-related skip).</p>
+
+  <!-- ===== 11.3 lifecycle ===== -->
+  <h3>11.3 Project Pause / Resume / Delete</h3>
+  <p><b>Deployment</b>: Rebuild <b>tenant-manager</b>. Semantics: this is triggered manually by calling the server-side API. After pausing, the data plane <b>truly stops</b> serving requests (the platform database's status leaves active, and the Kong gateway gate blocks access); resuming restores it. This is not automatic.</p>
+  <p><b>Usage</b> (admin API, requires an admin key):</p>
+  <pre>curl -X POST "https://&lt;studio-alb&gt;/admin/v1/projects/&lt;ref&gt;/pause"   -H "Authorization: Bearer &lt;admin-key&gt;"
+curl -X POST "https://&lt;studio-alb&gt;/admin/v1/projects/&lt;ref&gt;/resume"  -H "Authorization: Bearer &lt;admin-key&gt;"   <span class="c"># /restore is an equivalent alias</span>
+curl -X DELETE "https://&lt;studio-alb&gt;/admin/v1/projects/&lt;ref&gt;"       -H "Authorization: Bearer &lt;admin-key&gt;"</pre>
+  <p><b>Testing</b>: <code>./RUN_TESTS.sh lifecycle</code> — K0 create project, K1 pause → PAUSED, K2 <code>/resume</code> restores → ACTIVE_HEALTHY, K3 <code>/resume</code> == <code>/restore</code> alias, K4 REST/JS SDK reachable after resume, K5 delete tears down, K6 recreate with the same ref (201 or 409 guard) — 7 checks in total.</p>
+  <div class="note"><span class="label">How the paused data plane actually stops:</span>It relies on the Kong cache TTL (300s by default) naturally expiring. After pausing, a cached project will be blocked within at most one TTL; new projects take effect immediately.</div>
+
+  <!-- ===== 11.4 secrets ===== -->
+  <h3>11.4 Secrets Override Semantics</h3>
+  <p><b>Deployment</b>: Rebuild <b>function-deploy</b> (Studio). What was fixed: a secret with the same name should <b>replace</b> rather than stack; once a user overrides a default plaintext system secret (such as <code>SUPABASE_ANON_KEY</code> / <code>SUPABASE_SERVICE_ROLE_KEY</code>), the old plaintext value no longer lingers.</p>
+  <p><b>Usage</b> (via the Studio ALB, implemented by function-deploy's studio; methods <code>GET/POST/DELETE</code>, source at <code>app/function-deploy/apps/studio/pages/api/v1/projects/[ref]/secrets.ts</code>):</p>
+  <table>
+    <tr><th>Method + path</th><th>body</th><th>Notes</th></tr>
+    <tr><td><code>GET /api/v1/projects/{ref}/secrets</code></td><td>—</td><td>Returns a plaintext array <code>[{name,value,updated_at}]</code></td></tr>
+    <tr><td><code>POST /api/v1/projects/{ref}/secrets</code></td><td>A bare array <code>[{"name","value"}]</code></td><td>Same-name entries override rather than stack (201)</td></tr>
+    <tr><td><code>DELETE /api/v1/projects/{ref}/secrets</code></td><td>An array of strings <code>["NAME1","NAME2"]</code></td><td>Deletes a user secret; deleting a system name falls back to its default value</td></tr>
+  </table>
+  <pre>curl "https://&lt;studio-alb&gt;/api/v1/projects/&lt;ref&gt;/secrets" -H "Authorization: Bearer &lt;admin-key&gt;"                <span class="c"># GET</span>
+curl -X POST   "https://&lt;studio-alb&gt;/api/v1/projects/&lt;ref&gt;/secrets" -H "Authorization: Bearer &lt;admin-key&gt;" \
+  -H "Content-Type: application/json" -d '[{"name":"MY_KEY","value":"my-value"}]'                            <span class="c"># POST override/add</span>
+curl -X DELETE "https://&lt;studio-alb&gt;/api/v1/projects/&lt;ref&gt;/secrets" -H "Authorization: Bearer &lt;admin-key&gt;" \
+  -H "Content-Type: application/json" -d '["MY_KEY"]'                                                         <span class="c"># DELETE</span></pre>
+  <p><b>Testing</b>: <code>PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh secrets</code> — G the 4 default system secrets + plaintext, H override semantics (same name replaces, not duplicated), I delete semantics (system names fall back to their default, user secrets are actually deleted).</p>
+
+  <!-- ===== 11.5 login ===== -->
+  <h3>11.5 Login Enhancements (Google OAuth / Email Password Reset / Admin Password Change)</h3>
+  <p><b>Deployment</b>: Involves <b>4 services</b>, rolled in dependency order: <b>tenant-manager → auth → kong → function-deploy</b>. tenant-manager goes first (creates the platform database's OAuth provider table and produces the <code>external</code> field that GoTrue consumes); kong allows through OAuth/SAML callback endpoints that can't carry an apikey. <b>No new env vars/secrets</b>: Google credentials are entered per-tenant at runtime, and the client_secret is encrypted into the database using the existing <code>ENCRYPTION_KEY</code>.</p>
+  <pre>for svc in tenant-manager auth function-deploy; do ./build-and-push.sh $svc; done
+./build-and-push.sh kong
+for svc in tenant-manager auth-service kong-gateway function-deploy; do
+  aws ecs update-service --cluster &lt;cluster&gt; --service $svc --force-new-deployment --region &lt;region&gt;
+done</pre>
+  <p><b>Usage</b>: Login enhancements span two layers — the admin plane (tenant-manager, configures the provider, requires an admin key) and the data plane (GoTrue <code>/auth/v1/*</code>, via Kong, with a project apikey).</p>
+
+  <p>① <b>Admin plane: per-tenant Google provider configuration</b> (tenant-manager, via the Studio ALB):</p>
+  <table>
+    <tr><th>Method + path</th><th>Notes</th></tr>
+    <tr><td><code>PUT /admin/v1/projects/{ref}/auth/external/google</code></td><td>Upsert; body <code>{"enabled","client_id","client_secret","redirect_uri","skip_nonce_check"}</code>. The secret is stored encrypted</td></tr>
+    <tr><td><code>GET /admin/v1/projects/{ref}/auth/external/google</code></td><td>Read; <b>the secret is never echoed back</b> — only <code>secret_set:true</code> is returned</td></tr>
+    <tr><td><code>DELETE /admin/v1/projects/{ref}/auth/external/google</code></td><td>Removes the Google provider for this project</td></tr>
+  </table>
+  <pre>curl -X PUT "https://&lt;studio-alb&gt;/admin/v1/projects/&lt;ref&gt;/auth/external/google" -H "Authorization: Bearer &lt;admin-key&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":true,"client_id":"&lt;gid&gt;.apps.googleusercontent.com","client_secret":"&lt;secret&gt;","redirect_uri":"https://&lt;ref&gt;.&lt;domain&gt;/auth/v1/callback"}'</pre>
+
+  <p>② <b>Data plane: GoTrue auth endpoints</b> (base URL <code>https://&lt;ref&gt;.&lt;domain&gt;/auth/v1</code>, with <code>apikey: &lt;anon-key&gt;</code>; callback endpoints like <code>/callback</code> are allowed through by Kong without needing an apikey. Paths verified against the source at <code>app/supabase-auth/internal/api/api.go</code>):</p>
+  <table>
+    <tr><th>Need</th><th>Method + path</th><th>body / notes</th></tr>
+    <tr><td>5a Initiate Google login</td><td><code>GET /authorize?provider=google</code></td><td>302 redirect to Google, carrying the tenant's client_id</td></tr>
+    <tr><td>5a OAuth callback</td><td><code>GET /callback</code> and <code>POST /callback</code></td><td>Google redirects back here (no apikey needed), exchanges for a token and creates a session</td></tr>
+    <tr><td>5a Read provider status</td><td><code>GET /settings</code></td><td>Returns whether <code>external.google</code> is enabled</td></tr>
+    <tr><td>5b Send an email reset code</td><td><code>POST /recover</code></td><td>body <code>{"email":"..."}</code> (<b>no type field</b>) → sends a reset email</td></tr>
+    <tr><td>5b Verify and change password</td><td><code>POST /verify</code> (also <code>GET /verify</code>)</td><td>body <code>{"type":"recovery","email":"...","token":"&lt;code&gt;"}</code> (or <code>token_hash</code>)</td></tr>
+    <tr><td>5b OTP (optional)</td><td><code>POST /otp</code></td><td>body <code>{"email":"..."}</code> sends a one-time code</td></tr>
+    <tr><td>5c Admin-side user password change</td><td>Via the Studio backend <code>PATCH /api/platform/auth/{ref}/users/{id}</code></td><td>Studio internally calls GoTrue using service credentials; customers should <b>not</b> call the GoTrue admin API directly (see the caution below)</td></tr>
+  </table>
+  <pre><span class="c"># 5a Initiate Google login (browser redirect or supabase-js signInWithOAuth)</span>
+GET https://&lt;ref&gt;.&lt;domain&gt;/auth/v1/authorize?provider=google      <span class="c"># with apikey</span>
+
+<span class="c"># 5b Send an email reset code (the recover body only contains email, no type)</span>
+curl -X POST "https://&lt;ref&gt;.&lt;domain&gt;/auth/v1/recover" -H "apikey: &lt;anon-key&gt;" \
+  -H "Content-Type: application/json" -d '{"email":"user@example.com"}'
+<span class="c"># Once the user receives the code, call verify with type=recovery to complete the password change</span>
+curl -X POST "https://&lt;ref&gt;.&lt;domain&gt;/auth/v1/verify"  -H "apikey: &lt;anon-key&gt;" \
+  -H "Content-Type: application/json" -d '{"type":"recovery","email":"user@example.com","token":"&lt;code&gt;"}'
+
+<span class="c"># 5c Admin-side password change for a user — via the Studio backend API (Studio holds service credentials internally)</span>
+curl -X PATCH "https://&lt;studio-alb&gt;/api/platform/auth/&lt;ref&gt;/users/&lt;user_id&gt;" \
+  -H "Content-Type: application/json" -d '{"password":"NewPassw0rd!"}'</pre>
+  <div class="caution"><span class="label-c">5c real-world testing notes (verified against a live environment):</span>GoTrue's <code>/auth/v1/admin/*</code> endpoints require a <b>JWT with the service_role/supabase_admin role</b>; but this platform's Kong <code>/auth/v1</code> path <b>only passes through the opaque key — it never mints a JWT</b>. So a customer calling <code>/auth/v1/admin/users/{id}</code> directly with a <code>sb_secret_</code> opaque key will get <code>403 bad_jwt</code> (confirmed in testing). Admin-side password changes should go through the <b>Studio backend</b> (Studio calls <code>auth.admin.updateUserById()</code> internally using its own <code>SUPABASE_SERVICE_KEY</code>).</div>
+  <div class="note"><span class="label">supabase-js equivalents:</span><code>signInWithOAuth({provider:'google'})</code> (5a); <code>resetPasswordForEmail(email)</code> + <code>verifyOtp({type:'recovery',...})</code> (5b). For 5c, a server that holds a service_role JWT can use <code>auth.admin.updateUserById(id,{password})</code>.</div>
+  <div class="note"><span class="label">Body for the admin-plane PUT provider call:</span><code>enabled</code> is required; when <code>enabled=true</code>, <code>client_id</code> / <code>client_secret</code> / <code>redirect_uri</code> are all required; <code>skip_nonce_check</code> is optional (defaults to false). GET reads <b>never return client_secret</b> — only <code>secret_set: true/false</code>.</div>
+  <p>You need to add <code>https://&lt;ref&gt;.&lt;domain&gt;/auth/v1/callback</code> to the authorized redirect URIs in Google Cloud Console.</p>
+  <p><b>Testing</b>: <code>PROJECT_REF=&lt;ref&gt; ./RUN_TESTS.sh oauth</code> — O0 fetch anon key, O1 provider CRUD (encryption + masking), O2 GoTrue <code>/settings</code> reflects the tenant's google config, O3 Kong allows through OAuth/SAML endpoints, O4 protected endpoints still enforce key-auth, O5 <code>/authorize</code> redirects to Google with the tenant's client_id.</p>
+  <div class="caution"><span class="label-c">Known issue (being tracked):</span>Tenant databases cloned from the template database <code>supabase_template</code> are missing the new OAuth context columns on the <code>auth.flow_state</code> table (<code>CREATE TABLE IF NOT EXISTS</code> is a no-op against existing tables). Until the <b>template database is refreshed and existing tenants are backfilled</b> (<code>ALTER TABLE … ADD COLUMN IF NOT EXISTS</code>), <code>/authorize?provider=google</code> will return 500 (<code>Error creating flow state</code>). The oauth suite's O5 has accordingly been marked <code>xfail</code>; once fixed, it will become a hard assertion.</div>
+
+  <!-- ===== 11.6 function error classification ===== -->
+  <h3>11.6 Function Deployment Error Classification (404 → 422)</h3>
+  <p><b>Deployment</b>: Rebuild <b>function-deploy</b>. What was fixed: when a deployment fails due to a <b>syntax error in the function's code</b>, the old version incorrectly returned <code>404 Function not found</code> (making users think it was a platform bug); the new version distinguishes error types — a code error returns <code>422 FUNCTION_VALIDATION_FAILED</code>, and <code>404 FUNCTION_NOT_FOUND</code> is only returned when the function truly does not exist.</p>
+  <p><b>Usage</b>: Deploy/invoke normally; the error response body carries an explicit error code, making it easy for customers to self-diagnose.</p>
+  <p><b>Testing</b>: <code>./RUN_TESTS.sh fn-errors</code> — E1 bad code is rejected on deploy (422 FUNCTION_VALIDATION_FAILED), E2 valid code deploys successfully (201), E3 a missing function → 404 FUNCTION_NOT_FOUND, E4 a valid function actually runs — 4 checks in total.</p>
+
+  <div class="ok"><span class="label">Run everything at once:</span><code>cd tests && pip install -r requirements.txt &amp;&amp; ./RUN_TESTS.sh all</code> covers all 6 changes above plus regression for existing functionality. Aside from O5 in 11.5 (xfail) and a small number of environment-related skips, everything should be PASSED.</div>
+
+</main>
+<footer>
+  Supabase on AWS · Phase 2 Upgrade Guide · Operations Delivery Document<br>
+  Environment-specific parameters (domain, account, region, cluster name) are shown as <code>&lt;placeholder&gt;</code> — replace them with actual values when executing.
+</footer>
+</div>
+</body>
+</html>

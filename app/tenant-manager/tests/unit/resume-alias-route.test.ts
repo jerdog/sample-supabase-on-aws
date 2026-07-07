@@ -1,7 +1,7 @@
 /**
  * Unit test for the /resume alias.
  *
- * PDF 二期 §3.a asks for `admin/v1/project/resume`. The fork already exposes
+ * PDF Phase 2 §3.a asks for `admin/v1/project/resume`. The fork already exposes
  * `/admin/v1/projects/:ref/restore`. We add `/resume` as an alias that goes
  * through the same `restoreProject` service, so existing callers and the new
  * verb both work without divergent semantics.

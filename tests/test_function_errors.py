@@ -1,5 +1,5 @@
 """
-Edge Function deploy/runtime error classification tests (二期 PDF §6).
+Edge Function deploy/runtime error classification tests (Phase 2 PDF §6).
 
 Background: the platform used to collapse three distinct failures into one
 misleading 404 {"msg":"Function not found"}:
