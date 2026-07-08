@@ -198,9 +198,22 @@ aws ecr set-repository-policy \
 
 ### 7. Configure DNS
 
-Add a wildcard CNAME record pointing `*.${BASE_DOMAIN}` to the Kong ALB DNS name (from CDK outputs).
+Two DNS records are needed -- Studio runs on its own ALB and won't work if it only inherits the
+wildcard, since its `NEXT_PUBLIC_SITE_URL` is hardcoded to the `studio.` subdomain specifically:
 
-> **Cloudflare users**: disable proxy (DNS only / grey cloud) -- otherwise ACM SNI matching will fail.
+| Record | Type | Value | Purpose |
+|---|---|---|---|
+| `*.${BASE_DOMAIN}` | CNAME | `ALBDnsName` (from `cdk-outputs.json`) | Kong Gateway -- per-project APIs (`<ref>.${BASE_DOMAIN}`), `api.${BASE_DOMAIN}` |
+| `studio.${BASE_DOMAIN}` | CNAME | `StudioALBDnsName` (from `cdk-outputs.json`) | Studio management UI |
+
+```bash
+jq -r '.SupabaseStack | "Kong ALB:   " + .ALBDnsName, "Studio ALB: " + .StudioALBDnsName' cdk-outputs.json
+```
+
+> **Cloudflare users**: disable proxy (DNS only / grey cloud) on both records -- otherwise ACM SNI matching will fail.
+
+Once DNS propagates, `https://studio.${BASE_DOMAIN}` opens Studio directly -- no login required
+(it runs in self-hosted mode, `NEXT_PUBLIC_IS_PLATFORM=false`).
 
 ### 8. Create first project
 
