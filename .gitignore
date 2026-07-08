@@ -16,6 +16,7 @@ infra/lib/*.d.ts
 
 # Configuration (contains sensitive deployment values)
 config.json
+cdk-outputs.json
 
 # RDS CA bundle copied into per-service build contexts by build-and-push.sh
 # (build-time artifact; the canonical copy lives at repo-root certs/)

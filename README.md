@@ -158,8 +158,21 @@ curl -o certs/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/
 ### 6. Deploy infrastructure
 
 ```bash
-cd infra && npm run build && npx cdk deploy SupabaseStack --require-approval never
+cd infra && npm run build && npx cdk deploy SupabaseStack --require-approval never --outputs-file ../cdk-outputs.json
 ```
+
+`--outputs-file` writes every `CfnOutput` (ALB DNS names, all 7 ECS service names, RDS/Redis/EFS
+endpoints, Secrets Manager ARNs) to `cdk-outputs.json` at the repo root -- gitignored, since it's
+specific to your deployment. Come back to it any time without re-querying CloudFormation:
+
+```bash
+cat cdk-outputs.json | jq .SupabaseStack
+jq -r '.SupabaseStack.KongServiceName' cdk-outputs.json   # look up a single value
+```
+
+It's overwritten on every `cdk deploy`, so it always reflects your current stack -- if you tear
+down and redeploy (see [Tearing Down / Starting Over](#tearing-down--starting-over)), just run
+`cdk deploy` again and this file catches up automatically.
 
 Then set ECR Lambda pull permissions:
 
