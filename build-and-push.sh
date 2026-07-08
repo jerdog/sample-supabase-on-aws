@@ -197,7 +197,7 @@ for service in $SERVICES_TO_BUILD; do
     mkdir -p "$context/certs"
     cp "$CERT_FILE" "$context/certs/global-bundle.pem"
 
-    if docker build --platform linux/amd64 -t "$repository:latest" -f "$context/$dockerfile" "$context"; then
+    if docker build --platform linux/amd64 --provenance=false --sbom=false -t "$repository:latest" -f "$context/$dockerfile" "$context"; then
         echo "Image build succeeded"
     else
         echo "Image build failed"

@@ -44,6 +44,8 @@ aws ecr get-login-password --region $AWS_REGION | \
 echo "🏗️  Building x86_64 image..."
 docker build \
     --platform linux/amd64 \
+    --provenance=false \
+    --sbom=false \
     -t $ECR_REPO_NAME:$IMAGE_TAG \
     -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG \
     -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:latest \

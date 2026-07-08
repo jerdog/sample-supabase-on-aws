@@ -438,7 +438,8 @@ Then continue from [step 5 (Build & push Docker images)](#5-build--push-docker-i
 | Issue | Symptom | Solution |
 |-------|---------|----------|
 | Missing package-lock.json | tenant-manager build fails: `not found` | Run `npm install` in `app/tenant-manager/` |
-| ECR Lambda permission | `Lambda does not have permission to access the ECR image` | Run `aws ecr set-repository-policy` (see step 6) |
+| ECR Lambda permission | `Lambda does not have permission to access the ECR image` | Run `aws ecr set-repository-policy` (see step 6). Note this policy is lost if the `postgrest-lambda` ECR repo is ever deleted/recreated (e.g. a full teardown) -- it must be reapplied |
+| Lambda image manifest error | `The image manifest, config or layer media type ... is not supported` creating a project | Docker's default build behavior attaches an OCI provenance/SBOM attestation index, which Lambda rejects. `build-and-push.sh` already builds with `--provenance=false --sbom=false`; if you built `postgrest-lambda` some other way, rebuild it with those flags and re-push |
 | Kong 401 | Unauthorized on REST API calls | Use opaque keys (`sb_publishable_*`), not JWT. Set both `apikey` and `Authorization` headers |
 | DNS NXDOMAIN | Domain not resolving | Check CNAME target, disable Cloudflare proxy, wait for propagation |
 | Go build timeout / TLS handshake failure | auth-service Docker build hangs, or `tls: handshake failure` fetching modules | `app/supabase-auth/Dockerfile` pins `GOPROXY`. Corporate networks sometimes block/intercept one of `proxy.golang.org` (official) or `goproxy.cn` (China-region mirror) but not the other -- switch `ENV GOPROXY=...` in the Dockerfile to whichever proxy your network actually allows |
